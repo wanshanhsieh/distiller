@@ -30,7 +30,6 @@ def _prep_saturation_val_tensor(sat_val):
 
 def symmetric_linear_quantization_params(num_bits, saturation_val):
     is_scalar, sat_val = _prep_saturation_val_tensor(saturation_val)
-
     if any(sat_val < 0):
         raise ValueError('Saturation value must be >= 0')
 

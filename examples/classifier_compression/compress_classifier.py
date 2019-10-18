@@ -58,7 +58,7 @@ import distiller
 from distiller.models import create_model
 import distiller.apputils.image_classifier as classifier
 import distiller.apputils as apputils
-import parser
+import local_parser as parser
 import os
 import numpy as np
 
