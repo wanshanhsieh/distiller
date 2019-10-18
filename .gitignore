@@ -37,3 +37,5 @@ distiller.egg-info/
 
 examples/datasets/
 examples/classifier_compression/logs/
+examples/classifier_compression/checkpoint/
+examples/classifier_compression/figure/
