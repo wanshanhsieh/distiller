@@ -22,7 +22,7 @@ os.environ["PATH"] += os.pathsep + 'D:/2) install/graphviz-2.38/release/bin/'
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--net', '-n', help='NN model name', dest='net')
-parser.add_argument('--output', '-o', help='output file name', default='checkpoint.pkt', dest='output_file_name')
+parser.add_argument('--output', '-o', help='output file name', default='checkpoint.pth', dest='output_file_name')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--ch', default=None, type=int, help='slicing input channels')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
