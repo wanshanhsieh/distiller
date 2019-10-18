@@ -17,17 +17,16 @@
 """This package contains ImageNet and CIFAR image classification models for pytorch"""
 
 import copy
+import sys
 from functools import partial
 import torch
 import torchvision.models as torch_models
-import torch.nn as nn
 from . import cifar10 as cifar10_models
 from . import mnist as mnist_models
 from . import imagenet as imagenet_extra_models
 import pretrainedmodels
 
 from distiller.utils import set_model_input_shape_attr
-from distiller.modules import Mean, EltwiseAdd
 
 import logging
 msglogger = logging.getLogger()
@@ -61,41 +60,16 @@ ALL_MODEL_NAMES = sorted(map(lambda s: s.lower(),
                             set(IMAGENET_MODEL_NAMES + CIFAR10_MODEL_NAMES + MNIST_MODEL_NAMES)))
 
 
-def patch_torchvision_mobilenet_v2(model):
-    """
-    Patches TorchVision's MobileNetV2:
-    * To allow quantization, this adds modules for tensor operations (mean, element-wise addition) to the
-      model instance and patches the forward functions accordingly
-    * Fixes a bug in the torchvision implementation that prevents export to ONNX (and creation of SummaryGraph)
-    """
-    if not isinstance(model, torch_models.MobileNetV2):
-        raise TypeError("Only MobileNetV2 is acceptable.")
-
-    def patched_forward_mobilenet_v2(self, x):
+# A temporary monkey-patch to get past this Torchvision bug:
+# https://github.com/pytorch/pytorch/issues/20516
+def patch_torchvision_mobilenet_v2_bug(model):
+    def patched_forward(self, x):
         x = self.features(x)
-        # x = x.mean([2, 3]) # this was a bug: https://github.com/pytorch/pytorch/issues/20516
-        x = self.mean32(x)
+        #x = x.mean([2, 3])
+        x = x.mean(3).mean(2)
         x = self.classifier(x)
         return x
-    model.mean32 = nn.Sequential(
-        Mean(3), Mean(2)
-    )
-    model.__class__.forward = patched_forward_mobilenet_v2
-
-    def is_inverted_residual(module):
-        return isinstance(module, nn.Module) and module.__class__.__name__ == 'InvertedResidual'
-
-    def patched_forward_invertedresidual(self, x):
-        if self.use_res_connect:
-            return self.residual_eltwiseadd(self.conv(x), x)
-        else:
-            return self.conv(x)
-
-    for n, m in model.named_modules():
-        if is_inverted_residual(m):
-            if m.use_res_connect:
-                m.residual_eltwiseadd = EltwiseAdd()
-            m.__class__.forward = patched_forward_invertedresidual
+    model.__class__.forward = patched_forward
 
 
 _model_extensions = {}
@@ -121,11 +95,12 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
 
     model = None
     cadene = False
+    print('dataset: ' + dataset)
     try:
         if dataset == 'imagenet':
             model, cadene = _create_imagenet_model(arch, pretrained)
         elif dataset == 'cifar10':
-            model = _create_cifar10_model(arch, pretrained)
+            model = _create_cifar10_model(arch, pretrained, ch_group=8)
         elif dataset == 'mnist':
             model = _create_mnist_model(arch, pretrained)
     except ValueError:
@@ -164,7 +139,7 @@ def _create_imagenet_model(arch, pretrained):
         try:
             model = getattr(torch_models, arch)(pretrained=pretrained)
             if arch == "mobilenet_v2":
-                patch_torchvision_mobilenet_v2(model)
+                patch_torchvision_mobilenet_v2_bug(model)
         except NotImplementedError:
             # In torchvision 0.3, trying to download a model that has no
             # pretrained image available will raise NotImplementedError
@@ -187,11 +162,11 @@ def _create_imagenet_model(arch, pretrained):
     return model, cadene
 
 
-def _create_cifar10_model(arch, pretrained):
-    if pretrained:
-        raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
+def _create_cifar10_model(arch, pretrained, ch_group=8):
+    #if pretrained:
+    #    raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
     try:
-        model = cifar10_models.__dict__[arch]()
+        model = cifar10_models.__dict__[arch](pretrained=pretrained, ch_group=ch_group)
     except KeyError:
         raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
     return model
