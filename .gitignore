@@ -35,4 +35,4 @@ distiller.egg-info/
 # Jupyter
 .ipynb_checkpoints/
 
-exmaple/datasets/
+examples/datasets/
