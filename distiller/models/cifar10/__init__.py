@@ -22,4 +22,3 @@ from .preresnet_cifar import *
 from .vgg_cifar import *
 from .resnet_cifar_earlyexit import *
 from .plain_cifar import *
-from .net import *
