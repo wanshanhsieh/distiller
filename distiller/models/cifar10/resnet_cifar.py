@@ -41,12 +41,11 @@ import torch.nn as nn
 import math
 from collections import OrderedDict
 import torch.utils.model_zoo as model_zoo
-from distiller.modules.special_conv import Conv2d_TrimPsum
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'checkpoint', 'checkpoint_fp32_retrain_0.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'checkpoint', 'golden', 'quant8', '2019.10.14-173226_resnet10_quant_signed', 'checkpoint.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -345,7 +344,7 @@ class ResNetCifar(nn.Module):
         self.dropout = nn.Dropout()
 
         for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, Conv2d_TrimPsum):
+            if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.BatchNorm2d):
@@ -424,11 +423,29 @@ def resnet10_cifar(pretrained, ch_group, **kwargs):
     model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
     if pretrained: # no module. prefix is allowed #
         state_dict = torch.load(model_pretrained['resnet10_cifar'])
+        if 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
-            name = k[7:]  # remove module #
+            if('module.' in k):
+                name = k[7:]  # remove module #
+            else:
+                name = k
             new_state_dict[name] = v
-        model.load_state_dict(new_state_dict, strict=True)
+        model.load_state_dict(new_state_dict, strict=False)
+    # freeze some layers #
+    # model.conv1.weight.requires_grad = False
+    # model.conv2.weight.requires_grad = False
+    # model.conv3.weight.requires_grad = False
+    # model.layer1[0].conv1.weight.requires_grad = False
+    # model.layer1[0].conv2.weight.requires_grad = False
+    # model.layer2[0].conv1.weight.requires_grad = False
+    # model.layer2[0].conv2.weight.requires_grad = False
+    # model.layer2[0].downsample[0].weight.requires_grad = False
+    # model.layer3[0].conv1.weight.requires_grad = False
+    # model.layer3[0].conv2.weight.requires_grad = False
+    # model.layer3[0].downsample[0].weight.requires_grad = False
+    # model.fc.weight.requires_grad = False
     return model
 
 def resnet20_cifar(pretrained, **kwargs):

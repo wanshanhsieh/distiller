@@ -15,8 +15,21 @@
 #
 
 from enum import Enum
+import math
 import torch
 
+def nearest_power_of_2(x):
+    if x == 0:
+        out = torch.tensor(1).to(torch.float32).cuda()
+        if out.dim() == 0:
+            out = out.unsqueeze(0)
+    else:
+        power = int(math.ceil(math.log(x, 2)))
+        out = torch.tensor(2**power).to(torch.float32).cuda()
+        if out.dim() == 0:
+            out = out.unsqueeze(0)
+    return out
+    # return torch.tensor(1).cuda() if x == 0 else torch.tensor(2**power).cuda()
 
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
@@ -40,6 +53,7 @@ def symmetric_linear_quantization_params(num_bits, saturation_val):
     # value to 'n', so the scale becomes 1
     sat_val[sat_val == 0] = n
     scale = n / sat_val
+
     zero_point = torch.zeros_like(scale)
 
     if is_scalar:
@@ -74,12 +88,15 @@ def asymmetric_linear_quantization_params(num_bits, saturation_min, saturation_m
     diff[diff == 0] = n
 
     scale = n / diff
+
+    scale = nearest_power_of_2(scale.item())
+
     zero_point = scale * sat_min
     if integral_zero_point:
         zero_point = zero_point.round()
     if signed:
         zero_point += 2 ** (num_bits - 1)
-    if is_scalar:
+    if is_scalar or not isinstance(scale, torch.Tensor):
         return scale.item(), zero_point.item()
     return scale, zero_point
 
