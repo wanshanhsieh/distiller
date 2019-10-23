@@ -54,6 +54,8 @@ def symmetric_linear_quantization_params(num_bits, saturation_val):
     sat_val[sat_val == 0] = n
     scale = n / sat_val
 
+    scale = nearest_power_of_2(scale.item())
+
     zero_point = torch.zeros_like(scale)
 
     if is_scalar:
