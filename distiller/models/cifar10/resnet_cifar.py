@@ -44,8 +44,12 @@ import torch.utils.model_zoo as model_zoo
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
+#     'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'checkpoint', 'golden', 'quant8', '2019.10.14-173226_resnet10_quant_signed', 'checkpoint.pth'),
+model_saved = {
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
+}
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'checkpoint', 'golden', 'quant8', '2019.10.14-173226_resnet10_quant_signed', 'checkpoint.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -55,6 +59,28 @@ def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
+
+def fuse(conv, bn):
+    w = conv.weight
+    mean = bn.running_mean
+    var_sqrt = torch.sqrt(bn.running_var + 1E-7)
+    gamma = bn.weight
+    beta = bn.bias
+    if conv.bias is not None:
+        b = conv.bias
+    else:
+        b = mean.new_zeros(mean.shape)
+    w = w * (gamma / var_sqrt).reshape([conv.out_channels, 1, 1, 1])
+    b = ((b - mean)/var_sqrt) * gamma + beta
+    fused_conv = nn.Conv2d(conv.in_channels,
+                         conv.out_channels,
+                         conv.kernel_size,
+                         conv.stride,
+                         conv.padding,
+                         bias=True)
+    fused_conv.weight = nn.Parameter(w)
+    fused_conv.bias = nn.Parameter(b)
+    return fused_conv
 
 class SlicingLinearBlock(nn.Module):
     def __init__(self, in_features, out_features, bias=False, ch_group=8):
@@ -257,7 +283,7 @@ class SlicingBlock(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
+    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None, fusion=False):
         super(BasicBlock, self).__init__()
         self.block_gates = block_gates
         if(ch_group == None):
@@ -265,36 +291,54 @@ class BasicBlock(nn.Module):
         else:
             self.conv1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=8)
         self.bn1 = nn.BatchNorm2d(planes)
+        self.fused1 = fuse(self.conv1, self.bn1)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         if (ch_group == None):
             self.conv2 = conv3x3(planes, planes)
         else:
             self.conv2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=False, ch_group=8)
         self.bn2 = nn.BatchNorm2d(planes)
+        self.fused2 = fuse(self.conv2, self.bn2)
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
 
     def forward(self, x):
-        residual = out = x
+        if type(x) is tuple:
+            input = x[0]
+            fusion = x[1]
+            residual = out = input
+            # print('BasicBlock {0}'.format(fusion))
+        else:
+            fusion = False
+            residual = out = x
 
         if self.block_gates[0]:
-            # print('conv1 input {0}'.format(x.size()))
-            out = self.conv1(x)
-            # print('conv1 output {0}'.format(out.size()))
-            out = self.bn1(out)
+            if(fusion == False):
+                # print('conv1 input {0}'.format(x.size()))
+                out = self.conv1(x)
+                # print('conv1 output {0}'.format(out.size()))
+                out = self.bn1(out)
+            else:
+                out = self.fused1(input)
             out = self.relu1(out)
 
         if self.block_gates[1]:
-            # print('conv2 input {0}'.format(out.size()))
-            out = self.conv2(out)
-            # print('conv2 output {0}'.format(out.size()))
-            out = self.bn2(out)
+            if (fusion == False):
+                # print('conv2 input {0}'.format(out.size()))
+                out = self.conv2(out)
+                # print('conv2 output {0}'.format(out.size()))
+                out = self.bn2(out)
+            else:
+                out = self.fused2(out)
 
         if self.downsample is not None:
-            # print('downsample input {0}'.format(x.size()))
-            residual = self.downsample(x)
-            # print('downsample output {0}'.format(residual.size()))
+            if(fusion == False):
+                # print('downsample input {0}'.format(x.size()))
+                residual = self.downsample(x)
+                # print('downsample output {0}'.format(residual.size()))
+            else:
+                residual = self.downsample(input)
 
         out += residual
         out = self.relu2(out)
@@ -303,7 +347,7 @@ class BasicBlock(nn.Module):
 
 class ResNetCifar(nn.Module):
 
-    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None):
+    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None, fusion=False):
         self.nlayers = 0
         self.ch_group = ch_group
         # Each layer manages its own gates
@@ -318,25 +362,28 @@ class ResNetCifar(nn.Module):
         super(ResNetCifar, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
+        self.fused1 = fuse(self.conv1, self.bn1)
         self.relu1 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         else:
             self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(16)
+        self.fused2 = fuse(self.conv2, self.bn2)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
         else:
             self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8)
         self.bn3 = nn.BatchNorm2d(32)
+        self.fused3 = fuse(self.conv3, self.bn3)
         self.relu3 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group)
-        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group)
-        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group)
-        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group)
-        self.avgpool = nn.AvgPool2d(8, stride=8) #nn.AdaptiveAvgPool2d(1)
+        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group, fusion=fusion)
+        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group, fusion=fusion)
+        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group, fusion=fusion)
+        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group, fusion=fusion)
+        self.avgpool = nn.AvgPool2d(7, stride=7) #nn.AdaptiveAvgPool2d(1)
         if (ch_group == None):
             self.fc = nn.Linear(256 * block.expansion, num_classes)
         else:
@@ -351,65 +398,102 @@ class ResNetCifar(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
+    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None, fusion=False):
         downsample = None
 
         if stride != 1 or self.inplanes != planes * block.expansion:
             if (ch_group == None):
-                downsample = nn.Sequential(
-                    nn.Conv2d(self.inplanes, planes * block.expansion,
-                              kernel_size=1, stride=stride, bias=False),
-                    nn.BatchNorm2d(planes * block.expansion),
-                )
+                if(fusion == False):
+                    downsample = nn.Sequential(
+                        nn.Conv2d(self.inplanes, planes * block.expansion,
+                                  kernel_size=1, stride=stride, bias=False),
+                        nn.BatchNorm2d(planes * block.expansion),
+                    )
+                else:
+                    downsample = fuse(
+                        nn.Conv2d(self.inplanes, planes * block.expansion,
+                                  kernel_size=1, stride=stride, bias=False),
+                        nn.BatchNorm2d(planes * block.expansion)
+                    )
             else:
-                downsample = nn.Sequential(
-                    SlicingBlock(self.inplanes, planes * block.expansion, \
-                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
-                    nn.BatchNorm2d(planes * block.expansion),
-                )
-
+                if (fusion == False):
+                    downsample = nn.Sequential(
+                        SlicingBlock(self.inplanes, planes * block.expansion, \
+                                  kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
+                        nn.BatchNorm2d(planes * block.expansion),
+                    )
+                else:
+                    downsample = fuse(
+                        SlicingBlock(self.inplanes, planes * block.expansion, \
+                                     kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
+                        nn.BatchNorm2d(planes * block.expansion)
+                    )
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
-                            stride=stride, downsample=downsample, ch_group=ch_group))
+                            stride=stride, downsample=downsample, ch_group=ch_group, fusion=fusion))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(layer_gates[i], self.inplanes, planes, \
-                                ch_group=ch_group))
+                                ch_group=ch_group, fusion=fusion))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, fusion=False):
         # print('input {0}'.format(x.size()))
-
-        x = self.conv1(x)
-        # print('conv1 output {0}'.format(x.size()))
-        x = self.bn1(x)
+        # print('ResNetCifar {0}'.format(fusion))
+        if(fusion == False):
+            x = self.conv1(x)
+            # print('conv1 output {0}'.format(x.size()))
+            x = self.bn1(x)
+        else:
+            x = self.fused1(x)
         x = self.relu1(x)
 
-        # print('conv2 input {0}'.format(x.size()))
-        x = self.conv2(x)
-        # print('conv2 output {0}'.format(x.size()))
-        x = self.bn2(x)
+        if (fusion == False):
+            # print('conv2 input {0}'.format(x.size()))
+            x = self.conv2(x)
+            # print('conv2 output {0}'.format(x.size()))
+            x = self.bn2(x)
+        else:
+            x = self.fused2(x)
         x = self.relu2(x)
 
-        # print('conv3 input {0}'.format(x.size()))
-        x = self.conv3(x)
-        # print('conv3 output {0}'.format(x.size()))
-        x = self.bn3(x)
+        if (fusion == False):
+            # print('conv3 input {0}'.format(x.size()))
+            x = self.conv3(x)
+            # print('conv3 output {0}'.format(x.size()))
+            x = self.bn3(x)
+        else:
+            x = self.fused3(x)
         x = self.relu3(x)
 
         # print('maxpool input {0}'.format(x.size()))
         x = self.maxpool(x)
-        # print('maxpool output {0}'.format(x.size()))
-        x = self.layer1(x)
-        # print('layer1 output {0}'.format(x.size()))
-        x = self.layer2(x)
-        # print('layer2 output {0}'.format(x.size()))
-        x = self.layer3(x)
-        # print('layer3 output {0}'.format(x.size()))
-        x = self.layer4(x)
-        # print('layer4 output {0}'.format(x.size()))
         x = self.dropout(x)
+        # print('maxpool output {0}'.format(x.size()))
+        if(fusion == False):
+            x = self.layer1(x)
+        else:
+            x = self.layer1((x, fusion))
+        # print('layer1 output {0}'.format(x.size()))
+        if (fusion == False):
+            x = self.layer2(x)
+        else:
+            x = self.layer2((x, fusion))
+        x = self.dropout(x)
+        # print('layer2 output {0}'.format(x.size()))
+        if (fusion == False):
+            x = self.layer3(x)
+        else:
+            x = self.layer3((x, fusion))
+        # x = self.dropout(x)
+        # print('layer3 output {0}'.format(x.size()))
+        if (fusion == False):
+            x = self.layer4(x)
+        else:
+            x = self.layer4((x, fusion))
+        x = self.dropout(x)
+        # print('layer4 output {0}'.format(x.size()))
 
         # print('avgpool input {0}'.format(x.size()))
         x = self.avgpool(x)
@@ -419,8 +503,8 @@ class ResNetCifar(nn.Module):
         # print('fc output {0}'.format(x.size()))
         return x
 
-def resnet10_cifar(pretrained, ch_group, **kwargs):
-    model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
+def resnet10_cifar(pretrained, ch_group, fusion, **kwargs):
+    model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group, fusion=fusion)
     if pretrained: # no module. prefix is allowed #
         state_dict = torch.load(model_pretrained['resnet10_cifar'])
         if 'state_dict' in state_dict:
@@ -471,3 +555,53 @@ def resnet56_cifar(pretrained, **kwargs):
     if pretrained:
         model.load_state_dict(model_pretrained['resnet56_cifar'])
     return model
+
+def fuse_conv_and_bn(dict, conv_key, bn_key, fuse_key):
+    w = dict[conv_key+'.weight']
+    mean = dict[bn_key+'.running_mean']
+    var_sqrt = torch.sqrt(dict[bn_key+'.running_var'] + 1E-7)
+    gamma = dict[bn_key+'.weight']
+    beta = dict[bn_key+'.bias']
+    b = mean.new_zeros(mean.shape)
+    w = w * (gamma / var_sqrt).reshape([dict[conv_key+'.weight'].size(0), 1, 1, 1])
+    b = ((b - mean) / var_sqrt) * gamma + beta
+    dict[fuse_key+'.weight'] = w
+    dict[fuse_key+'.bias'] = b
+
+if __name__ == '__main__':
+    state_dict = torch.load(model_pretrained['resnet10_cifar'])
+    if 'state_dict' in state_dict:
+        state_dict = state_dict['state_dict']
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        if ('module.' in k):
+            name = k[7:]  # remove module #
+        else:
+            name = k
+        new_state_dict[name] = v
+
+    key_map = { ('conv1', 'bn1'): 'fused1',
+                ('conv2', 'bn2'): 'fused2',
+                ('conv3', 'bn3'): 'fused3',
+                ('layer1.0.conv1', 'layer1.0.bn1'): 'layer1.0.fused1',
+                ('layer1.0.conv2', 'layer1.0.bn2'): 'layer1.0.fused2',
+                ('layer2.0.conv1', 'layer2.0.bn1'): 'layer2.0.fused1',
+                ('layer2.0.conv2', 'layer2.0.bn2'): 'layer2.0.fused2',
+                ('layer2.0.downsample.0', 'layer2.0.downsample.1'): 'layer2.0.downsample',
+                ('layer3.0.conv1', 'layer3.0.bn1'): 'layer3.0.fused1',
+                ('layer3.0.conv2', 'layer3.0.bn2'): 'layer3.0.fused2',
+                ('layer3.0.downsample.0', 'layer3.0.downsample.1'): 'layer3.0.downsample',
+                ('layer4.0.conv1', 'layer4.0.bn1'): 'layer4.0.fused1',
+                ('layer4.0.conv2', 'layer4.0.bn2'): 'layer4.0.fused2',
+                ('layer4.0.downsample.0', 'layer4.0.downsample.1'): 'layer4.0.downsample',
+                }
+
+    for key, data in key_map.items():
+        fuse_conv_and_bn(new_state_dict, key[0], key[1], data)
+
+    torch.save(new_state_dict, model_saved['resnet10_cifar'])
+
+
+
+
+
