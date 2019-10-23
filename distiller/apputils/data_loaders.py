@@ -30,6 +30,14 @@ import distiller
 
 DATASETS_NAMES = ['imagenet', 'cifar10', 'mnist']
 
+def _mul(x):
+    return x*255
+
+def _sub(x):
+    return x-128
+
+def _round(x):
+    return torch.round(x)
 
 def classification_dataset_str_from_arch(arch):
     if 'cifar' in arch:
@@ -136,19 +144,27 @@ def cifar10_get_datasets(data_dir):
     """
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
-        transforms.Resize(226),
+        # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
+        transforms.Resize(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        transforms.Lambda(_mul),
+        transforms.Lambda(_round),
+        transforms.Lambda(_sub),
+        # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
 
     train_dataset = datasets.CIFAR10(root=data_dir, train=True,
                                      download=True, transform=train_transform)
 
     test_transform = transforms.Compose([
-        transforms.Resize(226),
+        # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
+        transforms.Resize(224),
         transforms.ToTensor(),
-        #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        transforms.Lambda(_mul),
+        transforms.Lambda(_round),
+        transforms.Lambda(_sub),
+        # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
 
     test_dataset = datasets.CIFAR10(root=data_dir, train=False,
