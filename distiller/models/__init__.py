@@ -162,11 +162,11 @@ def _create_imagenet_model(arch, pretrained):
     return model, cadene
 
 
-def _create_cifar10_model(arch, pretrained, ch_group=8):
+def _create_cifar10_model(arch, pretrained, ch_group=None, fusion=False):
     #if pretrained:
     #    raise ValueError("Model {} (CIFAR10) does not have a pretrained model".format(arch))
     try:
-        model = cifar10_models.__dict__[arch](pretrained=pretrained, ch_group=ch_group)
+        model = cifar10_models.__dict__[arch](pretrained=pretrained, ch_group=ch_group, fusion=fusion)
     except KeyError:
         raise ValueError("Model {} is not supported for dataset CIFAR10".format(arch))
     return model

@@ -41,15 +41,17 @@ import torch.nn as nn
 import math
 from collections import OrderedDict
 import torch.utils.model_zoo as model_zoo
+import numpy as np
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
-#     'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'checkpoint', 'golden', 'quant8', '2019.10.14-173226_resnet10_quant_signed', 'checkpoint.pth'),
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'activation')
+
 model_saved = {
     'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -81,6 +83,11 @@ def fuse(conv, bn):
     fused_conv.weight = nn.Parameter(w)
     fused_conv.bias = nn.Parameter(b)
     return fused_conv
+
+def dump_to_npy(name, tensor):
+    fileName = os.path.join(fileDumpPath, name)
+    tensorToNumpy = tensor.cpu().numpy()
+    np.save(fileName, tensorToNumpy)
 
 class SlicingLinearBlock(nn.Module):
     def __init__(self, in_features, out_features, bias=False, ch_group=8):
@@ -307,10 +314,12 @@ class BasicBlock(nn.Module):
         if type(x) is tuple:
             input = x[0]
             fusion = x[1]
+            dump_act = x[2]
             residual = out = input
             # print('BasicBlock {0}'.format(fusion))
         else:
             fusion = False
+            dump_act = None
             residual = out = x
 
         if self.block_gates[0]:
@@ -320,7 +329,11 @@ class BasicBlock(nn.Module):
                 # print('conv1 output {0}'.format(out.size()))
                 out = self.bn1(out)
             else:
+                if (dump_act != None):
+                    dump_to_npy(name=str(dump_act) + '.res2_input', tensor=input)
                 out = self.fused1(input)
+                if (dump_act != None):
+                    dump_to_npy(name=str(dump_act) + '.res2_conv1', tensor=out)
             out = self.relu1(out)
 
         if self.block_gates[1]:
@@ -331,6 +344,8 @@ class BasicBlock(nn.Module):
                 out = self.bn2(out)
             else:
                 out = self.fused2(out)
+                if (dump_act != None):
+                    dump_to_npy(name=str(dump_act) + '.res2_conv2', tensor=out)
 
         if self.downsample is not None:
             if(fusion == False):
@@ -339,8 +354,13 @@ class BasicBlock(nn.Module):
                 # print('downsample output {0}'.format(residual.size()))
             else:
                 residual = self.downsample(input)
+                if (dump_act != None):
+                    dump_to_npy(name=str(dump_act) + '.res2_match', tensor=residual)
 
         out += residual
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.res2_adder', tensor=out)
+
         out = self.relu2(out)
 
         return out
@@ -438,15 +458,19 @@ class ResNetCifar(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, fusion=False):
+    def forward(self, x, fusion=False, dump_act=None):
         # print('input {0}'.format(x.size()))
         # print('ResNetCifar {0}'.format(fusion))
+        if(dump_act != None):
+            dump_to_npy(name=str(dump_act)+'.input', tensor=x)
         if(fusion == False):
             x = self.conv1(x)
             # print('conv1 output {0}'.format(x.size()))
             x = self.bn1(x)
         else:
             x = self.fused1(x)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.conv1', tensor=x)
         x = self.relu1(x)
 
         if (fusion == False):
@@ -456,6 +480,8 @@ class ResNetCifar(nn.Module):
             x = self.bn2(x)
         else:
             x = self.fused2(x)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.conv2', tensor=x)
         x = self.relu2(x)
 
         if (fusion == False):
@@ -465,6 +491,8 @@ class ResNetCifar(nn.Module):
             x = self.bn3(x)
         else:
             x = self.fused3(x)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.conv3', tensor=x)
         x = self.relu3(x)
 
         # print('maxpool input {0}'.format(x.size()))
@@ -474,24 +502,24 @@ class ResNetCifar(nn.Module):
         if(fusion == False):
             x = self.layer1(x)
         else:
-            x = self.layer1((x, fusion))
+            x = self.layer1((x, fusion, None))
         # print('layer1 output {0}'.format(x.size()))
         if (fusion == False):
             x = self.layer2(x)
         else:
-            x = self.layer2((x, fusion))
+            x = self.layer2((x, fusion, dump_act))
         x = self.dropout(x)
         # print('layer2 output {0}'.format(x.size()))
         if (fusion == False):
             x = self.layer3(x)
         else:
-            x = self.layer3((x, fusion))
+            x = self.layer3((x, fusion, None))
         # x = self.dropout(x)
         # print('layer3 output {0}'.format(x.size()))
         if (fusion == False):
             x = self.layer4(x)
         else:
-            x = self.layer4((x, fusion))
+            x = self.layer4((x, fusion, None))
         x = self.dropout(x)
         # print('layer4 output {0}'.format(x.size()))
 
