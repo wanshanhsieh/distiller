@@ -76,18 +76,20 @@ def main():
     allColors = []
     allNames = []
 
-    checkpoint_name = 'D:/playground/MyDistiller/examples/classifier_compression/checkpoint/golden/quant8/2019.10.16-185349_resnet10_quant_ch8/checkpoint.pth'
+    checkpoint_name = 'D:/playground/MyDistiller/examples/classifier_compression/checkpoint/golden/fp32/checkpoint_fp32_retrain_1.pth'
     net = torch.load(checkpoint_name)
-    for key in net['state_dict']:
+    if('state_dict' in net):
+        net = net['state_dict']
+    for key in net:
         # print(key)
-        value = net['state_dict'][key]
-        if((('conv' in key or 'downsample' in key) and '.weight' in key and len(list(value.size())) == 5)\
+        value = net[key]
+        if((('conv' in key or 'downsample' in key) and '.weight' in key and ('quant' not in key and 'original' not in key) and len(list(value.size())) == 4)\
                 or ('fc' in key and '.weight' in key and len(list(value.size())) == 2)):
             allNames.append(key)
 
     for names in allNames:
         weightDis = WeightsDistribution()
-        layer = torch.load(checkpoint_name)['state_dict'][names]
+        layer = net[names]
         weightDis.getWeightValue(layer)
         weightDis.getInterval(0.01)
         print('{0} done'.format(names))
