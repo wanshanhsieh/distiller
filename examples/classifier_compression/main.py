@@ -14,6 +14,7 @@ import os
 import argparse
 import numpy as np
 from tifffile import imsave
+from skimage import io
 
 from utils import progress_bar
 from distiller.models.cifar10.resnet_cifar import *
@@ -31,6 +32,8 @@ parser.add_argument('--resume', '-r', action='store_true', help='resume from che
 parser.add_argument('--test', '-t', action='store_true', help='execute testing flow')
 parser.add_argument('--fuse', '-f', action='store_true', help='fuse conv and bn')
 parser.add_argument('--draw', '-d', action='store_true', help='draw the model graph')
+parser.add_argument('--dump_act', '-dpa', default=None, type=int, help='dump img activation value')
+parser.add_argument('--dump_img', '-dpi', action='store_true', help='dump resized image')
 args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -50,7 +53,6 @@ def _round(x):
 print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
     transforms.Resize(224),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -61,7 +63,6 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
     transforms.Resize(224),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
@@ -69,31 +70,43 @@ transform_test = transforms.Compose([
     transforms.Lambda(_sub),
 ])
 
+if args.dump_img:
+    transform_train_image = transforms.Compose([
+        transforms.RandomCrop(32, padding=4), \
+        transforms.Resize(224), \
+        transforms.RandomHorizontalFlip(),
+    ])
+
+    transform_test_image = transforms.Compose([
+        transforms.RandomCrop(32, padding=0), \
+        transforms.Resize(224),
+    ])
+    train_image_set = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=True, download=True, transform=transform_train_image)
+    train_image_loader = torch.utils.data.DataLoader(train_image_set, batch_size=1, shuffle=True, num_workers=2)
+    test_image_set = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=False, download=True, transform=transform_test_image)
+    test_image_loader = torch.utils.data.DataLoader(test_image_set, batch_size=1, shuffle=False, num_workers=2)
+
+    filePath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'datasets', 'cifar10_img_train_224x224')
+    f = open(os.path.join(filePath, 'cifar10_train.txt'), 'w')
+    for i, (img, label) in enumerate(train_image_set):
+        img_path = os.path.join(filePath, str(i)+'.jpg')
+        img = np.asanyarray(img)
+        io.imsave(img_path, img)
+        f.write(str(i)+'.jpg' + ' ' + str(label) + '\n')
+    f.close()
+    sys.exit()
+
 if not args.test:
     trainset = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=True, download=True, transform=transform_train)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=400, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=400, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
-# net = VGG('VGG19')
-# net = ResNet18()
-# net = resnet10_cifar(False)
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
 if args.fuse:
     fusion = True
 else:
@@ -115,6 +128,7 @@ if device == 'cuda':
     cudnn.benchmark = True
 # print(net)
 # sys.exit()
+
 criterion = nn.CrossEntropyLoss()
 # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 optimizer = optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
@@ -143,7 +157,7 @@ def train(epoch):
         # if (batch_idx == 0):
         #    input_train = inputs
         optimizer.zero_grad()
-        outputs = net(inputs, False)
+        outputs = net(inputs, False, False)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -156,7 +170,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-def test(epoch, fusion=False):
+def test(epoch, fusion=False, dump_act=None):
     global best_acc
     net.eval()
     test_loss = 0
@@ -164,19 +178,18 @@ def test(epoch, fusion=False):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            # if(batch_idx == 0):
-            #    input_test = inputs
-            outputs = net(inputs, fusion)
-            loss = criterion(outputs, targets)
+            if(dump_act == None or (dump_act != None and batch_idx == dump_act)):
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = net(inputs, fusion, dump_act)
+                loss = criterion(outputs, targets)
 
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                    % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
     # print(input_dump.size(0), input_dump.size(1), input_dump.size(2), input_dump.size(3))
 
     # Save checkpoint.
@@ -188,7 +201,7 @@ def test(epoch, fusion=False):
         print('Saving..')
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        innerFolder = '20191023_resnet10_fp32_fused_-128_127_224x224_resize'
+        innerFolder = '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize'
         if not os.path.isdir('checkpoint/'+str(innerFolder)):
             os.makedirs('checkpoint/'+str(innerFolder))
         if (acc > best_acc):
@@ -215,14 +228,17 @@ if __name__ == '__main__':
         times = 1
     else:
         times = args.epoch
+    if not args.test and args.dump_act != None:
+        print('Error: cant dump img {0} activation values during training'.format(str(args.dump_act)))
+        sys.exit()
     for epoch in range(start_epoch, start_epoch+times):
         accRecord.append(0.0)
         if not args.test:
             train(epoch)
         if (epoch == times-1):
-            test(epoch, fusion)
+            test(epoch, fusion, args.dump_act)
         else:
-            test(epoch, False)
+            test(epoch, False, args.dump_act)
     print('best_acc: {0}'.format(best_acc))
     for i in range(0, times):
         print(accRecord[i])
