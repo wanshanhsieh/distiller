@@ -45,13 +45,13 @@ import numpy as np
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'activation')
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191026_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'activation')
 
 model_saved = {
     'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -61,6 +61,11 @@ def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
+
+def conv3x3_bias(in_planes, out_planes, stride=1):
+    """3x3 convolution with padding"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+                     padding=1, bias=True)
 
 def fuse(conv, bn):
     w = conv.weight
@@ -290,7 +295,7 @@ class SlicingBlock(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None, fusion=False):
+    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
         super(BasicBlock, self).__init__()
         self.block_gates = block_gates
         if(ch_group == None):
@@ -298,14 +303,12 @@ class BasicBlock(nn.Module):
         else:
             self.conv1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=8)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.fused1 = fuse(self.conv1, self.bn1)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         if (ch_group == None):
             self.conv2 = conv3x3(planes, planes)
         else:
             self.conv2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=False, ch_group=8)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.fused2 = fuse(self.conv2, self.bn2)
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
@@ -313,49 +316,29 @@ class BasicBlock(nn.Module):
     def forward(self, x):
         if type(x) is tuple:
             input = x[0]
-            fusion = x[1]
-            dump_act = x[2]
+            dump_act = x[1]
             residual = out = input
-            # print('BasicBlock {0}'.format(fusion))
         else:
-            fusion = False
             dump_act = None
             residual = out = x
 
         if self.block_gates[0]:
-            if(fusion == False):
-                # print('conv1 input {0}'.format(x.size()))
-                out = self.conv1(x)
-                # print('conv1 output {0}'.format(out.size()))
-                out = self.bn1(out)
-            else:
-                if (dump_act != None):
-                    dump_to_npy(name=str(dump_act) + '.res2_input', tensor=input)
-                out = self.fused1(input)
-                if (dump_act != None):
-                    dump_to_npy(name=str(dump_act) + '.res2_conv1', tensor=out)
+            # print('conv1 input {0}'.format(x.size()))
+            out = self.conv1(x)
+            # print('conv1 output {0}'.format(out.size()))
+            out = self.bn1(out)
             out = self.relu1(out)
 
         if self.block_gates[1]:
-            if (fusion == False):
-                # print('conv2 input {0}'.format(out.size()))
-                out = self.conv2(out)
-                # print('conv2 output {0}'.format(out.size()))
-                out = self.bn2(out)
-            else:
-                out = self.fused2(out)
-                if (dump_act != None):
-                    dump_to_npy(name=str(dump_act) + '.res2_conv2', tensor=out)
+            # print('conv2 input {0}'.format(out.size()))
+            out = self.conv2(out)
+            # print('conv2 output {0}'.format(out.size()))
+            out = self.bn2(out)
 
         if self.downsample is not None:
-            if(fusion == False):
-                # print('downsample input {0}'.format(x.size()))
-                residual = self.downsample(x)
-                # print('downsample output {0}'.format(residual.size()))
-            else:
-                residual = self.downsample(input)
-                if (dump_act != None):
-                    dump_to_npy(name=str(dump_act) + '.res2_match', tensor=residual)
+            # print('downsample input {0}'.format(x.size()))
+            residual = self.downsample(x)
+            # print('downsample output {0}'.format(residual.size()))
 
         out += residual
         if (dump_act != None):
@@ -365,9 +348,64 @@ class BasicBlock(nn.Module):
 
         return out
 
-class ResNetCifar(nn.Module):
+class BasicBlockFused(nn.Module):
+    expansion = 1
 
-    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None, fusion=False):
+    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
+        super(BasicBlockFused, self).__init__()
+        self.block_gates = block_gates
+        if (ch_group == None):
+            self.fused1 = conv3x3_bias(inplanes, planes, stride)
+        else:
+            self.fused1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=8)
+        self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
+        if (ch_group == None):
+            self.fused2 = conv3x3_bias(planes, planes)
+        else:
+            self.fused2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=True, ch_group=8)
+        self.relu2 = nn.ReLU(inplace=False)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        if type(x) is tuple:
+            _input = x[0]
+            layerId = x[1]
+            dump_act = x[2]
+            residual = out = _input
+        else:
+            layerId = 0
+            dump_act = None
+            residual = out = x
+
+        if self.block_gates[0]:
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input', tensor=_input)
+            out = self.fused1(_input)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1', tensor=out)
+            out = self.relu1(out)
+
+        if self.block_gates[1]:
+            out = self.fused2(out)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2', tensor=out)
+
+        if self.downsample is not None:
+            residual = self.downsample(_input)
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_match', tensor=residual)
+
+        out += residual
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder', tensor=out)
+
+        out = self.relu2(out)
+
+        return out
+
+class ResNetCifar(nn.Module):
+    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None):
         self.nlayers = 0
         self.ch_group = ch_group
         # Each layer manages its own gates
@@ -382,27 +420,24 @@ class ResNetCifar(nn.Module):
         super(ResNetCifar, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
-        self.fused1 = fuse(self.conv1, self.bn1)
         self.relu1 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         else:
             self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(16)
-        self.fused2 = fuse(self.conv2, self.bn2)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
         else:
             self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8)
         self.bn3 = nn.BatchNorm2d(32)
-        self.fused3 = fuse(self.conv3, self.bn3)
         self.relu3 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group, fusion=fusion)
-        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group, fusion=fusion)
-        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group, fusion=fusion)
-        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group, fusion=fusion)
+        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group)
+        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group)
+        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group)
+        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group)
         self.avgpool = nn.AvgPool2d(7, stride=7) #nn.AdaptiveAvgPool2d(1)
         if (ch_group == None):
             self.fc = nn.Linear(256 * block.expansion, num_classes)
@@ -418,121 +453,215 @@ class ResNetCifar(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None, fusion=False):
+    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
         downsample = None
 
         if stride != 1 or self.inplanes != planes * block.expansion:
             if (ch_group == None):
-                if(fusion == False):
-                    downsample = nn.Sequential(
-                        nn.Conv2d(self.inplanes, planes * block.expansion,
-                                  kernel_size=1, stride=stride, bias=False),
-                        nn.BatchNorm2d(planes * block.expansion),
-                    )
-                else:
-                    downsample = fuse(
-                        nn.Conv2d(self.inplanes, planes * block.expansion,
-                                  kernel_size=1, stride=stride, bias=False),
-                        nn.BatchNorm2d(planes * block.expansion)
-                    )
+                downsample = nn.Sequential(
+                    nn.Conv2d(self.inplanes, planes * block.expansion,
+                              kernel_size=1, stride=stride, bias=False),
+                    nn.BatchNorm2d(planes * block.expansion),
+                )
             else:
-                if (fusion == False):
-                    downsample = nn.Sequential(
-                        SlicingBlock(self.inplanes, planes * block.expansion, \
-                                  kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
-                        nn.BatchNorm2d(planes * block.expansion),
-                    )
-                else:
-                    downsample = fuse(
-                        SlicingBlock(self.inplanes, planes * block.expansion, \
-                                     kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
-                        nn.BatchNorm2d(planes * block.expansion)
-                    )
+                downsample = nn.Sequential(
+                    SlicingBlock(self.inplanes, planes * block.expansion, \
+                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
+                    nn.BatchNorm2d(planes * block.expansion),
+                )
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
-                            stride=stride, downsample=downsample, ch_group=ch_group, fusion=fusion))
+                            stride=stride, downsample=downsample, ch_group=ch_group))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(layer_gates[i], self.inplanes, planes, \
-                                ch_group=ch_group, fusion=fusion))
+                                ch_group=ch_group))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, fusion=False, dump_act=None):
+    def forward(self, x, dump_act=None):
         # print('input {0}'.format(x.size()))
         # print('ResNetCifar {0}'.format(fusion))
         if(dump_act != None):
             dump_to_npy(name=str(dump_act)+'.input', tensor=x)
-        if(fusion == False):
-            x = self.conv1(x)
-            # print('conv1 output {0}'.format(x.size()))
-            x = self.bn1(x)
-        else:
-            x = self.fused1(x)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.conv1', tensor=x)
+
+        x = self.conv1(x)
+        # print('conv1 output {0}'.format(x.size()))
+        x = self.bn1(x)
         x = self.relu1(x)
 
-        if (fusion == False):
-            # print('conv2 input {0}'.format(x.size()))
-            x = self.conv2(x)
-            # print('conv2 output {0}'.format(x.size()))
-            x = self.bn2(x)
-        else:
-            x = self.fused2(x)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.conv2', tensor=x)
+        # print('conv2 input {0}'.format(x.size()))
+        x = self.conv2(x)
+        # print('conv2 output {0}'.format(x.size()))
+        x = self.bn2(x)
         x = self.relu2(x)
 
-        if (fusion == False):
-            # print('conv3 input {0}'.format(x.size()))
-            x = self.conv3(x)
-            # print('conv3 output {0}'.format(x.size()))
-            x = self.bn3(x)
-        else:
-            x = self.fused3(x)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.conv3', tensor=x)
+        # print('conv3 input {0}'.format(x.size()))
+        x = self.conv3(x)
+        # print('conv3 output {0}'.format(x.size()))
+        x = self.bn3(x)
         x = self.relu3(x)
 
         # print('maxpool input {0}'.format(x.size()))
         x = self.maxpool(x)
         x = self.dropout(x)
         # print('maxpool output {0}'.format(x.size()))
-        if(fusion == False):
-            x = self.layer1(x)
-        else:
-            x = self.layer1((x, fusion, None))
+
+        x = self.layer1(x)
         # print('layer1 output {0}'.format(x.size()))
-        if (fusion == False):
-            x = self.layer2(x)
-        else:
-            x = self.layer2((x, fusion, dump_act))
+
+        x = self.layer2(x)
         x = self.dropout(x)
         # print('layer2 output {0}'.format(x.size()))
-        if (fusion == False):
-            x = self.layer3(x)
-        else:
-            x = self.layer3((x, fusion, None))
+
+        x = self.layer3(x)
         # x = self.dropout(x)
         # print('layer3 output {0}'.format(x.size()))
-        if (fusion == False):
-            x = self.layer4(x)
-        else:
-            x = self.layer4((x, fusion, None))
+
+        x = self.layer4(x)
         x = self.dropout(x)
         # print('layer4 output {0}'.format(x.size()))
 
         # print('avgpool input {0}'.format(x.size()))
         x = self.avgpool(x)
         # print('avgpool output {0}'.format(x.size()))
+
         x = x.view(-1, x.size(1))
         x = self.fc(x)
         # print('fc output {0}'.format(x.size()))
+
+        return x
+
+class ResNetCifarFused(nn.Module):
+
+    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None):
+        self.nlayers = 0
+        self.ch_group = ch_group
+        # Each layer manages its own gates
+        self.layer_gates = []
+        for layer in range(4):
+            # For each of the 3 layers, create block gates: each block has two layers
+            self.layer_gates.append([])  # [True, True] * layers[layer])
+            for blk in range(layers[layer]):
+                self.layer_gates[layer].append([True, True])
+
+        self.inplanes = 32  # 64
+        super(ResNetCifarFused, self).__init__()
+
+        self.fused1 = nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=True)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        if (self.ch_group == None):
+            self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+        else:
+            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+        self.relu2 = nn.ReLU(inplace=True)
+
+        if (self.ch_group == None):
+            self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
+        else:
+            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=8)
+        self.relu3 = nn.ReLU(inplace=True)
+
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group)
+        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group)
+        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group)
+        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group)
+
+        self.avgpool = nn.AvgPool2d(7, stride=7) #nn.AdaptiveAvgPool2d(1)
+
+        if (ch_group == None):
+            self.fc = nn.Linear(256 * block.expansion, num_classes)
+        else:
+            self.fc = SlicingLinearBlock(256 * block.expansion, num_classes)
+        self.dropout = nn.Dropout()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
+        downsample = None
+
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            if (ch_group == None):
+                downsample = nn.Conv2d(self.inplanes, planes * block.expansion, \
+                                       kernel_size=1, stride=stride, bias=True)
+            else:
+                downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
+                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=8)
+        layers = []
+        layers.append(block(layer_gates[0], self.inplanes, planes, \
+                            stride=stride, downsample=downsample, ch_group=ch_group))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(layer_gates[i], self.inplanes, planes, \
+                                ch_group=ch_group))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x, dump_act=None):
+        # print('input {0}'.format(x.size()))
+        # print('ResNetCifar {0}'.format(fusion))
+        if(dump_act != None):
+            dump_to_npy(name=str(dump_act)+'.input', tensor=x)
+        x = self.fused1(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv1', tensor=x)
+        x = self.relu1(x)
+
+        x = self.fused2(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv2', tensor=x)
+        x = self.relu2(x)
+
+        x = self.fused3(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv3', tensor=x)
+        x = self.relu3(x)
+
+        # print('maxpool input {0}'.format(x.size()))
+        x = self.maxpool(x)
+        x = self.dropout(x)
+        # print('maxpool output {0}'.format(x.size()))
+
+        x = self.layer1((x, 1, None))
+        # print('layer1 output {0}'.format(x.size()))
+
+        x = self.layer2((x, 2, dump_act))
+        x = self.dropout(x)
+        # print('layer2 output {0}'.format(x.size()))
+
+        x = self.layer3((x, 3, None))
+        # x = self.dropout(x)
+        # print('layer3 output {0}'.format(x.size()))
+
+        x = self.layer4((x, 4, None))
+        x = self.dropout(x)
+        # print('layer4 output {0}'.format(x.size()))
+
+        # print('avgpool input {0}'.format(x.size()))
+        x = self.avgpool(x)
+        # print('avgpool output {0}'.format(x.size()))
+
+        x = x.view(-1, x.size(1))
+        x = self.fc(x)
+        # print('fc output {0}'.format(x.size()))
+
         return x
 
 def resnet10_cifar(pretrained, ch_group, fusion, **kwargs):
-    model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group, fusion=fusion)
+    if(fusion == False):
+        model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
+    else:
+        model = ResNetCifarFused(BasicBlockFused, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
     if pretrained: # no module. prefix is allowed #
         state_dict = torch.load(model_pretrained['resnet10_cifar'])
         if 'state_dict' in state_dict:

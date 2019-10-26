@@ -101,7 +101,7 @@ if not args.test:
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=400, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=400, shuffle=False, num_workers=2)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -157,7 +157,7 @@ def train(epoch):
         # if (batch_idx == 0):
         #    input_train = inputs
         optimizer.zero_grad()
-        outputs = net(inputs, False, False)
+        outputs = net(inputs, None)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
@@ -170,7 +170,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-def test(epoch, fusion=False, dump_act=None):
+def test(epoch, dump_act=None):
     global best_acc
     net.eval()
     test_loss = 0
@@ -180,7 +180,7 @@ def test(epoch, fusion=False, dump_act=None):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             if(dump_act == None or (dump_act != None and batch_idx == dump_act)):
                 inputs, targets = inputs.to(device), targets.to(device)
-                outputs = net(inputs, fusion, dump_act)
+                outputs = net(inputs, dump_act)
                 loss = criterion(outputs, targets)
 
                 test_loss += loss.item()
@@ -201,7 +201,7 @@ def test(epoch, fusion=False, dump_act=None):
         print('Saving..')
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        innerFolder = '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize'
+        innerFolder = '20191026_resnet10_quant8_fused_sym_-128_127_224x224_resize'
         if not os.path.isdir('checkpoint/'+str(innerFolder)):
             os.makedirs('checkpoint/'+str(innerFolder))
         if (acc > best_acc):
@@ -236,9 +236,9 @@ if __name__ == '__main__':
         if not args.test:
             train(epoch)
         if (epoch == times-1):
-            test(epoch, fusion, args.dump_act)
+            test(epoch, args.dump_act)
         else:
-            test(epoch, False, args.dump_act)
+            test(epoch, args.dump_act)
     print('best_acc: {0}'.format(best_acc))
     for i in range(0, times):
         print(accRecord[i])
