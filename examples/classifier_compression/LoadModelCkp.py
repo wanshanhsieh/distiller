@@ -3,7 +3,7 @@ import torch
 import struct
 import numpy as np
 
-fileName = os.path.join('checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth')
+fileName = os.path.join('checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth')
 fileNameNew = os.path.join('checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth')
 
 model_q = torch.load(fileName)
@@ -13,39 +13,46 @@ _my_dict_tmp = {}
 _my_dict_fuse = {}
 
 key_map = {'fused1': 'conv1',
+           'relu1.fake_q': 'conv1',
            'fused2': 'conv2',
+           'relu2.fake_q': 'conv2',
            'fused3': 'conv3',
+           'relu3.fake_q': 'conv3',
            'layer1.0.fused1': 'res1_conv1',
+           'layer1.0.relu1.fake_q': 'res1_conv1',
            'layer1.0.fused2': 'res1_conv2',
+           'layer1.0.relu2.fake_q': 'res1_conv2',
            'layer2.0.fused1': 'res2_conv1',
+           'layer2.0.relu1.fake_q': 'res2_conv1',
            'layer2.0.fused2': 'res2_conv2',
            'layer2.0.downsample': 'res2_match',
+           'layer2.0.relu2.fake_q': 'res2_adder',
            'layer3.0.fused1': 'res3_conv1',
+           'layer3.0.relu1.fake_q': 'res3_conv1',
            'layer3.0.fused2': 'res3_conv2',
            'layer3.0.downsample': 'res3_match',
+           'layer3.0.relu2.fake_q': 'res3_adder',
            'layer4.0.fused1': 'res4_conv1',
+           'layer4.0.relu1.fake_q': 'res4_conv1',
            'layer4.0.fused2': 'res4_conv2',
            'layer4.0.downsample': 'res4_match',
+           'layer4.0.relu2.fake_q': 'res4_adder',
            'fc': 'fc',
-           'relu1.fake_q': 'conv1',
-           'relu2.fake_q': 'conv2',
-           'relu3.fake_q': 'conv3',
-           'layer1.0.relu1.fake_q': 'res1_conv1',
-           'layer1.0.relu2.fake_q': 'res1_conv2',
-           'layer2.0.relu1.fake_q': 'res2_conv1',
-           'layer2.0.relu2.fake_q': 'res2_conv2',
-           'layer3.0.relu1.fake_q': 'res3_conv1',
-           'layer3.0.relu2.fake_q': 'res3_conv2',
-           'layer4.0.relu1.fake_q': 'res4_conv1',
-           'layer4.0.relu2.fake_q': 'res4_conv2',
            'inputs_quant': 'fc'
            }
 
+std_names = ['conv1', 'conv2', 'conv3', \
+             'res1_conv1', 'res1_conv2', \
+             'res2_conv1', 'res2_conv2', 'res2_match', \
+             'res3_conv1', 'res3_conv2', 'res3_match', \
+             'res4_conv1', 'res4_conv2', 'res4_match', \
+             'fc']
+
 def get_clamp_limit(bit_size=8, signed=True):
     signed_limit = 2 ** (bit_size - 1)
-    if(bit_size == 32):
-        _max = 2147483500
-        return (-signed_limit, 2147483500) if signed else (0, 2 * signed_limit - 1)
+    # if(bit_size == 32):
+    #     _max = 2147483500
+    #     return (-signed_limit, 2147483500) if signed else (0, 2 * signed_limit - 1)
     return (-signed_limit, signed_limit - 1) if signed else (0, 2 * signed_limit - 1)
 
 def clamp(input, min, max, inplace=False):
@@ -63,7 +70,7 @@ def trim_prefix():
         model_q['trim_state_dict'][new_key] = data
 
 def parse_quant_info():
-    for key, data in model_q['state_dict'].items():
+    for key, data in model_q.items():
         items = str(key).split('.')
         items.remove(items[len(items) - 1])
         new_key = str('.'.join(items))
@@ -151,92 +158,104 @@ def _quantValue(input, scale, zero_point, clamp_min, clamp_max):
 def _dequantValue(input, scale, zero_point):
     return (input + zero_point) / scale
 
-def _dump_value_weight_and_bias(input, outputFolder, name, type):
+def _dump_value_struct_pack(input, outputFolder, name, mode):
     fileName = os.path.join('checkpoint', outputFolder, name+'.txt')
-    if(type == 'weight'):
-        mode = 'f'
-    elif(type == 'bias'):
-        mode = 'i'
-    else:
-        mode = 'b'
     t = torch.flatten(input)
     with open(fileName, "wb") as text_file:
         for o in range(len(t)):
             text_file.write( struct.pack(mode, t[o]) )
     text_file.close()
 
-def _dump_value_weight_and_bias_numpy(input, outputFolder, name):
+def _dump_value_numpy(input, outputFolder, name):
     fileName = os.path.join('checkpoint', outputFolder, name)
     inputToNumpy = input.cpu().numpy()
     np.save(fileName, inputToNumpy)
 
 def dump_weight_and_bias_to_file():
-    outputFolder = '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize'
+    outputFolder = '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test'
     type = 'weight'
     if(type == 'weight'):
         postfix = '.fp32'
+        mode = 'f' ## fp
     elif(type == 'bias'):
         postfix = '.q32'
+        mode = 'i' ## int
     else:
         postfix = '.q8'
+        mode = 'b' ## char
 
     for key, data in key_map.items():
         # new_key = str('module.' + str(key) + '.' + type + '_quant')
         new_key = str('module.' + str(key) + '.' + type)
         if new_key in model_q:
             print(new_key)
-            _dump_value_weight_and_bias(model_q[new_key], \
-                                       outputFolder, \
-                                       data + '.' + type + postfix, \
-                                       type)
-            _dump_value_weight_and_bias_numpy(model_q[new_key], \
-                                             outputFolder, \
-                                             data + '.' + type + postfix)
+            _dump_value_struct_pack(model_q[new_key], \
+                                    outputFolder, \
+                                    data + '.' + type + postfix, \
+                                    mode)
+            _dump_value_numpy(model_q[new_key], \
+                              outputFolder, \
+                              data + '.' + type + postfix)
 
 def dump_scale_info(outputFolder, name):
     fileNameDump = os.path.join('checkpoint', outputFolder, name+'.txt')
     with open(fileNameDump, "w") as text_file:
         for key, data in key_map.items():
             weight_key = str('module.' + str(key) + '.weight_scale')
+            bias_key = str('module.' + str(key) + '.bias_scale')
             image_key = str('module.' + str(key) + '.scale')
             if(weight_key in model_q):
                 text_file.writelines('{0}\n'.format(data))
                 text_file.writelines('w: {0}\n'.format(model_q[weight_key].item()))
+            if (bias_key in model_q):
+                text_file.writelines('{0}\n'.format(data))
+                text_file.writelines('b: {0}\n'.format(model_q[bias_key].item()))
             if (image_key in model_q):
                 text_file.writelines('{0}\n'.format(data))
                 text_file.writelines('o: {0}\n'.format(model_q[image_key].item()))
     text_file.close()
 
 if __name__ == '__main__':
-    torch.set_printoptions(precision=5)
+    torch.set_printoptions(precision=9)
+
+    if ('state_dict' in model_q):
+         model_q = model_q['state_dict']
 
     # trim_prefix()
     # torch.save(model_q, fileNameNew)
-    # parse_quant_info()
+    parse_quant_info()
     # quant_dequant_weight()
     # replace_with_dequant_value_and_save()
 
-    # quant = torch.Tensor([2147483647])
-    # _min, __max = get_clamp_limit(bit_size=32, signed=True)
-    # _max = 2147483500
-    # print('min {0:d}, max {1:d}'.format(_min, _max))
-    # print('---------------------------------------')
-    # print('origin value: %d' % quant.item())
-    # print('---------------------------------------')
-    # _clamp = clamp(quant, _min, _max, False)
-    # print('clamp tensor: {0}'.format(_clamp))
-    # print('clamp value:  %d' % _clamp.item())
-    # print(struct.pack('i', int(_clamp.item())))
-
-    dump_weight_and_bias_to_file()
-
-    # outputFolder = '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize'
-    # name = 'my_scale'
+    outputFolder = '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test'
+    # name = 'scale_TAQ_2'
     # dump_scale_info(outputFolder, name)
 
-    # fileName = os.path.join('checkpoint', outputFolder, 'bias', name)
-    # tmpNpy = np.load(fileName)
-    # print(tmpNpy)
+    for name in std_names:
+        fileName = os.path.join('checkpoint', \
+                                '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test', \
+                                '2.'+name+'.bias.npy')
+        try:
+            tmpNpy = np.load(fileName)
+            # print(tmpNpy)
+        except IOError as e:
+            print('[Error] no such file {0}'.format('2.'+name+'.bias.npy'))
+
+        _biasTensor = torch.from_numpy(tmpNpy).float().cuda()
+
+        for key, data in key_map.items():
+            if(data == name and 'module.'+key in _my_dict):
+                if('b_scale' in _my_dict['module.'+key]):
+                    _biasScale = _my_dict['module.'+key]['b_scale'][0]
+                    print(name, _biasScale)
+                    _min, _max = get_clamp_limit(bit_size=32, signed=True)
+                    _biasQuant = _quantValue(_biasTensor, \
+                                             _biasScale, \
+                                             0, \
+                                             _min, _max)
+                    _dump_value_numpy(_biasQuant, outputFolder, '2.'+name+'.bias.int32.npy')
+                    # biasQuant = _biasQuant.cpu().detach().numpy()
+                    # print(biasQuant)
 
 
 
