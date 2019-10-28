@@ -45,13 +45,13 @@ import numpy as np
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191026_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'activation')
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test')
 
 model_saved = {
     'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -67,31 +67,9 @@ def conv3x3_bias(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=True)
 
-def fuse(conv, bn):
-    w = conv.weight
-    mean = bn.running_mean
-    var_sqrt = torch.sqrt(bn.running_var + 1E-7)
-    gamma = bn.weight
-    beta = bn.bias
-    if conv.bias is not None:
-        b = conv.bias
-    else:
-        b = mean.new_zeros(mean.shape)
-    w = w * (gamma / var_sqrt).reshape([conv.out_channels, 1, 1, 1])
-    b = ((b - mean)/var_sqrt) * gamma + beta
-    fused_conv = nn.Conv2d(conv.in_channels,
-                         conv.out_channels,
-                         conv.kernel_size,
-                         conv.stride,
-                         conv.padding,
-                         bias=True)
-    fused_conv.weight = nn.Parameter(w)
-    fused_conv.bias = nn.Parameter(b)
-    return fused_conv
-
 def dump_to_npy(name, tensor):
     fileName = os.path.join(fileDumpPath, name)
-    tensorToNumpy = tensor.cpu().numpy()
+    tensorToNumpy = tensor.detach().cpu().numpy()
     np.save(fileName, tensorToNumpy)
 
 class SlicingLinearBlock(nn.Module):
@@ -368,6 +346,7 @@ class BasicBlockFused(nn.Module):
         self.stride = stride
 
     def forward(self, x):
+        global testPhase
         if type(x) is tuple:
             _input = x[0]
             layerId = x[1]
@@ -380,25 +359,31 @@ class BasicBlockFused(nn.Module):
 
         if self.block_gates[0]:
             if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input', tensor=_input)
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input.activation', tensor=_input)
             out = self.fused1(_input)
             if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1', tensor=out)
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1.activation', tensor=out)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.weight', tensor=self.fused1.weight)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.bias', tensor=self.fused1.bias)
             out = self.relu1(out)
 
         if self.block_gates[1]:
             out = self.fused2(out)
             if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2', tensor=out)
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2.activation', tensor=out)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.weight', tensor=self.fused2.weight)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.bias', tensor=self.fused2.bias)
 
         if self.downsample is not None:
             residual = self.downsample(_input)
             if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_match', tensor=residual)
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_match.activation', tensor=residual)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.weight', tensor=self.downsample.weight)
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.bias', tensor=self.downsample.bias)
 
         out += residual
         if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder', tensor=out)
+            dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder.activation', tensor=out)
 
         out = self.relu2(out)
 
@@ -608,23 +593,31 @@ class ResNetCifarFused(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, dump_act=None):
+        global testPhase
+
         # print('input {0}'.format(x.size()))
         # print('ResNetCifar {0}'.format(fusion))
         if(dump_act != None):
-            dump_to_npy(name=str(dump_act)+'.input', tensor=x)
+            dump_to_npy(name=str(dump_act)+'.input.activation', tensor=x)
         x = self.fused1(x)
         if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.conv1', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv1.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv1.weight', tensor=self.fused1.weight)
+            dump_to_npy(name=str(dump_act) + '.conv1.bias', tensor=self.fused1.bias)
         x = self.relu1(x)
 
         x = self.fused2(x)
         if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.conv2', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv2.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv2.weight', tensor=self.fused2.weight)
+            dump_to_npy(name=str(dump_act) + '.conv2.bias', tensor=self.fused2.bias)
         x = self.relu2(x)
 
         x = self.fused3(x)
         if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.conv3', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv3.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv3.weight', tensor=self.fused3.weight)
+            dump_to_npy(name=str(dump_act) + '.conv3.bias', tensor=self.fused3.bias)
         x = self.relu3(x)
 
         # print('maxpool input {0}'.format(x.size()))
@@ -632,18 +625,18 @@ class ResNetCifarFused(nn.Module):
         x = self.dropout(x)
         # print('maxpool output {0}'.format(x.size()))
 
-        x = self.layer1((x, 1, None))
+        x = self.layer1((x, 1, dump_act))
         # print('layer1 output {0}'.format(x.size()))
 
         x = self.layer2((x, 2, dump_act))
         x = self.dropout(x)
         # print('layer2 output {0}'.format(x.size()))
 
-        x = self.layer3((x, 3, None))
+        x = self.layer3((x, 3, dump_act))
         # x = self.dropout(x)
         # print('layer3 output {0}'.format(x.size()))
 
-        x = self.layer4((x, 4, None))
+        x = self.layer4((x, 4, dump_act))
         x = self.dropout(x)
         # print('layer4 output {0}'.format(x.size()))
 
@@ -653,6 +646,10 @@ class ResNetCifarFused(nn.Module):
 
         x = x.view(-1, x.size(1))
         x = self.fc(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.fc.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.fc.weight', tensor=self.fc.weight)
+            dump_to_npy(name=str(dump_act) + '.fc.bias', tensor=self.fc.bias)
         # print('fc output {0}'.format(x.size()))
 
         return x
