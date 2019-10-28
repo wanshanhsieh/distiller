@@ -563,7 +563,7 @@ class RangeLinearQuantParamLayerWrapper(RangeLinearQuantWrapper):
             # improve performance on inference.
             self.wrapped_module.weight.data += self.w_zero_point
             self.is_simulated_quant_weight_shifted.add_(1) # i.e. is_simulated_quant_weight_shifted = True
-
+        # print(self.w_scale, self.b_scale)
         input_q += self.in_0_zero_point
         accum = self.wrapped_module.forward(input_q)
         clamp(accum.data, self.accum_min_q_val, self.accum_max_q_val, inplace=True)
@@ -1120,7 +1120,7 @@ class PostTrainLinearQuantizer(Quantizer):
 
     def _pre_prepare_model(self, dummy_input):
         if not self.has_bidi_distiller_lstm:
-            self._apply_bn_folding(dummy_input)
+            # self._apply_bn_folding(dummy_input)
             self._apply_activation_stats_fusions()
         else:
             self._apply_bidi_distiller_lstm_stats_fusion()
@@ -1246,8 +1246,7 @@ def update_ema(biased_ema, value, decay, step):
 
 def inputs_quantize_wrapped_forward(self, input):
     input = self.inputs_quant(input)
-    return self.original_forward(input)
-
+    return self.original_forward(input, dump_act=None)
 
 class FakeLinearQuantization(nn.Module):
     def __init__(self, num_bits=8, mode=LinearQuantMode.SYMMETRIC, ema_decay=0.999, dequantize=True, inplace=False):
@@ -1403,6 +1402,7 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             with torch.no_grad():
                 scale, zero_point = _get_quant_params_from_tensor(param_fp, ptq.num_bits, self.mode,
                                                                   per_channel=perch)
+            # print('{0} {1}'.format(ptq, scale))
             m.register_buffer(ptq.q_attr_name + '_scale', torch.ones_like(scale))
             m.register_buffer(ptq.q_attr_name + '_zero_point', torch.zeros_like(zero_point))
 
