@@ -81,7 +81,7 @@ worker_init_fn = __deterministic_worker_init_fn
 
 testset = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, \
-                                         batch_size=1, \
+                                         batch_size=100, \
                                          shuffle=False, \
                                          num_workers=1, \
                                          worker_init_fn=worker_init_fn)
