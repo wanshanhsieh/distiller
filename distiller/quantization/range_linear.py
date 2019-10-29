@@ -1307,7 +1307,7 @@ class FakeLinearQuantization(nn.Module):
 
         input = clamp(input, actual_min.item(), actual_max.item(), False)
         input = LinearQuantizeSTE.apply(input, self.scale, self.zero_point, self.dequantize, False)
-
+        # print('{0} {1}'.format(self.training, self.scale.item()))
         return input
 
     def extra_repr(self):

@@ -29,7 +29,6 @@ def nearest_power_of_2(x):
         if out.dim() == 0:
             out = out.unsqueeze(0)
     return out
-    # return torch.tensor(1).cuda() if x == 0 else torch.tensor(2**power).cuda()
 
 def _prep_saturation_val_tensor(sat_val):
     is_scalar = not isinstance(sat_val, torch.Tensor)
