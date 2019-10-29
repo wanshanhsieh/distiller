@@ -4,6 +4,7 @@ import struct
 import numpy as np
 
 fileName = os.path.join('checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth')
+fileName = os.path.join('checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test', 'checkpoint_8626.pth')
 fileNameNew = os.path.join('checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth')
 
 model_q = torch.load(fileName)
@@ -205,14 +206,15 @@ def dump_scale_info(outputFolder, name):
             bias_key = str('module.' + str(key) + '.bias_scale')
             image_key = str('module.' + str(key) + '.scale')
             if(weight_key in model_q):
-                text_file.writelines('{0}\n'.format(data))
-                text_file.writelines('w: {0}\n'.format(model_q[weight_key].item()))
+                text_file.writelines('config w\n')
+                text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[weight_key]).item()))
             if (bias_key in model_q):
-                text_file.writelines('{0}\n'.format(data))
-                text_file.writelines('b: {0}\n'.format(model_q[bias_key].item()))
+                text_file.writelines('config b\n')
+                text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[bias_key]).item()))
             if (image_key in model_q):
-                text_file.writelines('{0}\n'.format(data))
-                text_file.writelines('o: {0}\n'.format(model_q[image_key].item()))
+                text_file.writelines('config o\n')
+                text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[image_key]).item()))
+                text_file.writelines('\n')
     text_file.close()
 
 if __name__ == '__main__':
@@ -227,35 +229,33 @@ if __name__ == '__main__':
     # quant_dequant_weight()
     # replace_with_dequant_value_and_save()
 
-    outputFolder = '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test'
-    # name = 'scale_TAQ_2'
-    # dump_scale_info(outputFolder, name)
+    outputFolder = '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test'
+    name = 'scale_QAT_8626_b100_shift'
+    dump_scale_info(outputFolder, name)
 
-    for name in std_names:
-        fileName = os.path.join('checkpoint', \
-                                '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test', \
-                                '2.'+name+'.bias.npy')
-        try:
-            tmpNpy = np.load(fileName)
-            # print(tmpNpy)
-        except IOError as e:
-            print('[Error] no such file {0}'.format('2.'+name+'.bias.npy'))
+    # for name in std_names:
+    #     fileName = os.path.join('checkpoint', \
+    #                             '20191028_resnet10_quant8_fused_symm_-128_127_224x224_test', \
+    #                             '2.'+name+'.bias.npy')
+    #     try:
+    #         tmpNpy = np.load(fileName)
+    #         # print(tmpNpy)
+    #     except IOError as e:
+    #         print('[Error] no such file {0}'.format('2.'+name+'.bias.npy'))
 
-        _biasTensor = torch.from_numpy(tmpNpy).float().cuda()
+    #     _biasTensor = torch.from_numpy(tmpNpy).float().cuda()
 
-        for key, data in key_map.items():
-            if(data == name and 'module.'+key in _my_dict):
-                if('b_scale' in _my_dict['module.'+key]):
-                    _biasScale = _my_dict['module.'+key]['b_scale'][0]
-                    print(name, _biasScale)
-                    _min, _max = get_clamp_limit(bit_size=32, signed=True)
-                    _biasQuant = _quantValue(_biasTensor, \
-                                             _biasScale, \
-                                             0, \
-                                             _min, _max)
-                    _dump_value_numpy(_biasQuant, outputFolder, '2.'+name+'.bias.int32.npy')
-                    # biasQuant = _biasQuant.cpu().detach().numpy()
-                    # print(biasQuant)
+    #     for key, data in key_map.items():
+    #         if(data == name and 'module.'+key in _my_dict):
+    #             if('b_scale' in _my_dict['module.'+key]):
+    #                 _biasScale = _my_dict['module.'+key]['b_scale'][0]
+    #                 print(name, _biasScale)
+    #                 _min, _max = get_clamp_limit(bit_size=32, signed=True)
+    #                 _biasQuant = _quantValue(_biasTensor, \
+    #                                          _biasScale, \
+    #                                          0, \
+    #                                          _min, _max)
+    #                 _dump_value_numpy(_biasQuant, outputFolder, '2.'+name+'.bias.int32.npy')
 
 
 
