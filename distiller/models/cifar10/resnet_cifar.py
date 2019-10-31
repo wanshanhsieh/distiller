@@ -48,10 +48,10 @@ __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar
 fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
 
 model_saved = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test', 'checkpoint_220x_fuse.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220', 'checkpoint_224x_ch8_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220', 'checkpoint_ch8_retrain_4.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
@@ -280,13 +280,13 @@ class BasicBlock(nn.Module):
         if(ch_group == None):
             self.conv1 = conv3x3(inplanes, planes, stride)
         else:
-            self.conv1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=8)
+            self.conv1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=ch_group)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         if (ch_group == None):
             self.conv2 = conv3x3(planes, planes)
         else:
-            self.conv2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=False, ch_group=8)
+            self.conv2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn2 = nn.BatchNorm2d(planes)
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
@@ -336,12 +336,12 @@ class BasicBlockFused(nn.Module):
         if (ch_group == None):
             self.fused1 = conv3x3_bias(inplanes, planes, stride)
         else:
-            self.fused1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=8)
+            self.fused1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=ch_group)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         if (ch_group == None):
             self.fused2 = conv3x3_bias(planes, planes)
         else:
-            self.fused2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=True, ch_group=8)
+            self.fused2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
@@ -417,13 +417,13 @@ class ResNetCifar(nn.Module):
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn2 = nn.BatchNorm2d(16)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8)
+            self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn3 = nn.BatchNorm2d(32)
         self.relu3 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -459,7 +459,7 @@ class ResNetCifar(nn.Module):
             else:
                 downsample = nn.Sequential(
                     SlicingBlock(self.inplanes, planes * block.expansion, \
-                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
+                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=ch_group),
                     nn.BatchNorm2d(planes * block.expansion),
                 )
         layers = []
@@ -545,13 +545,13 @@ class ResNetCifarReshape(nn.Module):
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn2 = nn.BatchNorm2d(16)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8)
+            self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn3 = nn.BatchNorm2d(32)
         self.relu3 = nn.ReLU(inplace=True)
         self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1)) # left, right, top, bottom
@@ -590,7 +590,7 @@ class ResNetCifarReshape(nn.Module):
             else:
                 downsample = nn.Sequential(
                     SlicingBlock(self.inplanes, planes * block.expansion, \
-                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=8),
+                              kernel_size=1, stride=stride, padding=0, bias=False, ch_group=ch_group),
                     nn.BatchNorm2d(planes * block.expansion),
                 )
         layers = []
@@ -697,13 +697,13 @@ class ResNetCifarFused(nn.Module):
         if (self.ch_group == None):
             self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=True)
 
         if (self.ch_group == None):
             self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=8)
+            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu3 = nn.ReLU(inplace=True)
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -739,7 +739,7 @@ class ResNetCifarFused(nn.Module):
                                        kernel_size=1, stride=stride, bias=True)
             else:
                 downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
-                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=8)
+                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=ch_group)
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
                             stride=stride, downsample=downsample, ch_group=ch_group))
@@ -868,13 +868,13 @@ class ResNetCifarReshapeFused(nn.Module):
         if (self.ch_group == None):
             self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=True)
 
         if (self.ch_group == None):
             self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=8)
+            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu3 = nn.ReLU(inplace=True)
 
         self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1))  # left, right, top, bottom
@@ -913,7 +913,7 @@ class ResNetCifarReshapeFused(nn.Module):
                                        kernel_size=1, stride=stride, bias=True)
             else:
                 downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
-                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=8)
+                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=ch_group)
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
                             stride=stride, downsample=downsample, ch_group=ch_group))
@@ -1093,6 +1093,146 @@ if __name__ == '__main__':
                 ('layer4.0.conv2', 'layer4.0.bn2'): 'layer4.0.fused2',
                 ('layer4.0.downsample.0', 'layer4.0.downsample.1'): 'layer4.0.downsample',
                 }
+
+    key_ch8_map = {('conv1', 'bn1'): 'fused1',
+
+                   ('conv2.conv_0', 'bn2'): 'fused2.conv_0',
+                   ('conv2.conv_1', 'bn2'): 'fused2.conv_1',
+
+                   ('conv3.conv_0', 'bn3'): 'fused3.conv_0',
+                   ('conv3.conv_1', 'bn3'): 'fused3.conv_1',
+
+                   ('layer1.0.conv1.conv_0', 'layer1.0.bn1'): 'layer1.0.fused1.conv_0',
+                   ('layer1.0.conv1.conv_1', 'layer1.0.bn1'): 'layer1.0.fused1.conv_1',
+                   ('layer1.0.conv1.conv_2', 'layer1.0.bn1'): 'layer1.0.fused1.conv_2',
+                   ('layer1.0.conv1.conv_3', 'layer1.0.bn1'): 'layer1.0.fused1.conv_3',
+
+                   ('layer1.0.conv2.conv_0', 'layer1.0.bn2'): 'layer1.0.fused2.conv_0',
+                   ('layer1.0.conv2.conv_1', 'layer1.0.bn2'): 'layer1.0.fused2.conv_1',
+                   ('layer1.0.conv2.conv_2', 'layer1.0.bn2'): 'layer1.0.fused2.conv_2',
+                   ('layer1.0.conv2.conv_3', 'layer1.0.bn2'): 'layer1.0.fused2.conv_3',
+
+                   ('layer2.0.conv1.conv_0', 'layer2.0.bn1'): 'layer2.0.fused1.conv_0',
+                   ('layer2.0.conv1.conv_1', 'layer2.0.bn1'): 'layer2.0.fused1.conv_1',
+                   ('layer2.0.conv1.conv_2', 'layer2.0.bn1'): 'layer2.0.fused1.conv_2',
+                   ('layer2.0.conv1.conv_3', 'layer2.0.bn1'): 'layer2.0.fused1.conv_3',
+
+                   ('layer2.0.conv2.conv_0', 'layer2.0.bn2'): 'layer2.0.fused2.conv_0',
+                   ('layer2.0.conv2.conv_1', 'layer2.0.bn2'): 'layer2.0.fused2.conv_1',
+                   ('layer2.0.conv2.conv_2', 'layer2.0.bn2'): 'layer2.0.fused2.conv_2',
+                   ('layer2.0.conv2.conv_3', 'layer2.0.bn2'): 'layer2.0.fused2.conv_3',
+                   ('layer2.0.conv2.conv_4', 'layer2.0.bn2'): 'layer2.0.fused2.conv_4',
+                   ('layer2.0.conv2.conv_5', 'layer2.0.bn2'): 'layer2.0.fused2.conv_5',
+                   ('layer2.0.conv2.conv_6', 'layer2.0.bn2'): 'layer2.0.fused2.conv_6',
+                   ('layer2.0.conv2.conv_7', 'layer2.0.bn2'): 'layer2.0.fused2.conv_7',
+
+                   ('layer2.0.downsample.0.conv_0', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_0',
+                   ('layer2.0.downsample.0.conv_1', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_1',
+                   ('layer2.0.downsample.0.conv_2', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_2',
+                   ('layer2.0.downsample.0.conv_3', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_3',
+
+                   ('layer3.0.conv1.conv_0', 'layer3.0.bn1'): 'layer3.0.fused1.conv_0',
+                   ('layer3.0.conv1.conv_1', 'layer3.0.bn1'): 'layer3.0.fused1.conv_1',
+                   ('layer3.0.conv1.conv_2', 'layer3.0.bn1'): 'layer3.0.fused1.conv_2',
+                   ('layer3.0.conv1.conv_3', 'layer3.0.bn1'): 'layer3.0.fused1.conv_3',
+                   ('layer3.0.conv1.conv_4', 'layer3.0.bn1'): 'layer3.0.fused1.conv_4',
+                   ('layer3.0.conv1.conv_5', 'layer3.0.bn1'): 'layer3.0.fused1.conv_5',
+                   ('layer3.0.conv1.conv_6', 'layer3.0.bn1'): 'layer3.0.fused1.conv_6',
+                   ('layer3.0.conv1.conv_7', 'layer3.0.bn1'): 'layer3.0.fused1.conv_7',
+
+                   ('layer3.0.conv2.conv_0', 'layer3.0.bn2'): 'layer3.0.fused2.conv_0',
+                   ('layer3.0.conv2.conv_1', 'layer3.0.bn2'): 'layer3.0.fused2.conv_1',
+                   ('layer3.0.conv2.conv_2', 'layer3.0.bn2'): 'layer3.0.fused2.conv_2',
+                   ('layer3.0.conv2.conv_3', 'layer3.0.bn2'): 'layer3.0.fused2.conv_3',
+                   ('layer3.0.conv2.conv_4', 'layer3.0.bn2'): 'layer3.0.fused2.conv_4',
+                   ('layer3.0.conv2.conv_5', 'layer3.0.bn2'): 'layer3.0.fused2.conv_5',
+                   ('layer3.0.conv2.conv_6', 'layer3.0.bn2'): 'layer3.0.fused2.conv_6',
+                   ('layer3.0.conv2.conv_7', 'layer3.0.bn2'): 'layer3.0.fused2.conv_7',
+                   ('layer3.0.conv2.conv_8', 'layer3.0.bn2'): 'layer3.0.fused2.conv_8',
+                   ('layer3.0.conv2.conv_9', 'layer3.0.bn2'): 'layer3.0.fused2.conv_9',
+                   ('layer3.0.conv2.conv_10', 'layer3.0.bn2'): 'layer3.0.fused2.conv_10',
+                   ('layer3.0.conv2.conv_11', 'layer3.0.bn2'): 'layer3.0.fused2.conv_11',
+                   ('layer3.0.conv2.conv_12', 'layer3.0.bn2'): 'layer3.0.fused2.conv_12',
+                   ('layer3.0.conv2.conv_13', 'layer3.0.bn2'): 'layer3.0.fused2.conv_13',
+                   ('layer3.0.conv2.conv_14', 'layer3.0.bn2'): 'layer3.0.fused2.conv_14',
+                   ('layer3.0.conv2.conv_15', 'layer3.0.bn2'): 'layer3.0.fused2.conv_15',
+
+                   ('layer3.0.downsample.0.conv_0', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_0',
+                   ('layer3.0.downsample.0.conv_1', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_1',
+                   ('layer3.0.downsample.0.conv_2', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_2',
+                   ('layer3.0.downsample.0.conv_3', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_3',
+                   ('layer3.0.downsample.0.conv_4', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_4',
+                   ('layer3.0.downsample.0.conv_5', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_5',
+                   ('layer3.0.downsample.0.conv_6', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_6',
+                   ('layer3.0.downsample.0.conv_7', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_7',
+
+                   ('layer4.0.conv1.conv_0', 'layer4.0.bn1'): 'layer4.0.fused1.conv_0',
+                   ('layer4.0.conv1.conv_1', 'layer4.0.bn1'): 'layer4.0.fused1.conv_1',
+                   ('layer4.0.conv1.conv_2', 'layer4.0.bn1'): 'layer4.0.fused1.conv_2',
+                   ('layer4.0.conv1.conv_3', 'layer4.0.bn1'): 'layer4.0.fused1.conv_3',
+                   ('layer4.0.conv1.conv_4', 'layer4.0.bn1'): 'layer4.0.fused1.conv_4',
+                   ('layer4.0.conv1.conv_5', 'layer4.0.bn1'): 'layer4.0.fused1.conv_5',
+                   ('layer4.0.conv1.conv_6', 'layer4.0.bn1'): 'layer4.0.fused1.conv_6',
+                   ('layer4.0.conv1.conv_7', 'layer4.0.bn1'): 'layer4.0.fused1.conv_7',
+                   ('layer4.0.conv1.conv_8', 'layer4.0.bn1'): 'layer4.0.fused1.conv_8',
+                   ('layer4.0.conv1.conv_9', 'layer4.0.bn1'): 'layer4.0.fused1.conv_9',
+                   ('layer4.0.conv1.conv_10', 'layer4.0.bn1'): 'layer4.0.fused1.conv_10',
+                   ('layer4.0.conv1.conv_11', 'layer4.0.bn1'): 'layer4.0.fused1.conv_11',
+                   ('layer4.0.conv1.conv_12', 'layer4.0.bn1'): 'layer4.0.fused1.conv_12',
+                   ('layer4.0.conv1.conv_13', 'layer4.0.bn1'): 'layer4.0.fused1.conv_13',
+                   ('layer4.0.conv1.conv_14', 'layer4.0.bn1'): 'layer4.0.fused1.conv_14',
+                   ('layer4.0.conv1.conv_15', 'layer4.0.bn1'): 'layer4.0.fused1.conv_15',
+
+                   ('layer4.0.conv2.conv_0', 'layer4.0.bn2'): 'layer4.0.fused2.conv_0',
+                   ('layer4.0.conv2.conv_1', 'layer4.0.bn2'): 'layer4.0.fused2.conv_1',
+                   ('layer4.0.conv2.conv_2', 'layer4.0.bn2'): 'layer4.0.fused2.conv_2',
+                   ('layer4.0.conv2.conv_3', 'layer4.0.bn2'): 'layer4.0.fused2.conv_3',
+                   ('layer4.0.conv2.conv_4', 'layer4.0.bn2'): 'layer4.0.fused2.conv_4',
+                   ('layer4.0.conv2.conv_5', 'layer4.0.bn2'): 'layer4.0.fused2.conv_5',
+                   ('layer4.0.conv2.conv_6', 'layer4.0.bn2'): 'layer4.0.fused2.conv_6',
+                   ('layer4.0.conv2.conv_7', 'layer4.0.bn2'): 'layer4.0.fused2.conv_7',
+                   ('layer4.0.conv2.conv_8', 'layer4.0.bn2'): 'layer4.0.fused2.conv_8',
+                   ('layer4.0.conv2.conv_9', 'layer4.0.bn2'): 'layer4.0.fused2.conv_9',
+                   ('layer4.0.conv2.conv_10', 'layer4.0.bn2'): 'layer4.0.fused2.conv_10',
+                   ('layer4.0.conv2.conv_11', 'layer4.0.bn2'): 'layer4.0.fused2.conv_11',
+                   ('layer4.0.conv2.conv_12', 'layer4.0.bn2'): 'layer4.0.fused2.conv_12',
+                   ('layer4.0.conv2.conv_13', 'layer4.0.bn2'): 'layer4.0.fused2.conv_13',
+                   ('layer4.0.conv2.conv_14', 'layer4.0.bn2'): 'layer4.0.fused2.conv_14',
+                   ('layer4.0.conv2.conv_15', 'layer4.0.bn2'): 'layer4.0.fused2.conv_15',
+                   ('layer4.0.conv2.conv_16', 'layer4.0.bn2'): 'layer4.0.fused2.conv_16',
+                   ('layer4.0.conv2.conv_17', 'layer4.0.bn2'): 'layer4.0.fused2.conv_17',
+                   ('layer4.0.conv2.conv_18', 'layer4.0.bn2'): 'layer4.0.fused2.conv_18',
+                   ('layer4.0.conv2.conv_19', 'layer4.0.bn2'): 'layer4.0.fused2.conv_19',
+                   ('layer4.0.conv2.conv_20', 'layer4.0.bn2'): 'layer4.0.fused2.conv_20',
+                   ('layer4.0.conv2.conv_21', 'layer4.0.bn2'): 'layer4.0.fused2.conv_21',
+                   ('layer4.0.conv2.conv_22', 'layer4.0.bn2'): 'layer4.0.fused2.conv_22',
+                   ('layer4.0.conv2.conv_23', 'layer4.0.bn2'): 'layer4.0.fused2.conv_23',
+                   ('layer4.0.conv2.conv_24', 'layer4.0.bn2'): 'layer4.0.fused2.conv_24',
+                   ('layer4.0.conv2.conv_25', 'layer4.0.bn2'): 'layer4.0.fused2.conv_25',
+                   ('layer4.0.conv2.conv_26', 'layer4.0.bn2'): 'layer4.0.fused2.conv_26',
+                   ('layer4.0.conv2.conv_27', 'layer4.0.bn2'): 'layer4.0.fused2.conv_27',
+                   ('layer4.0.conv2.conv_28', 'layer4.0.bn2'): 'layer4.0.fused2.conv_28',
+                   ('layer4.0.conv2.conv_29', 'layer4.0.bn2'): 'layer4.0.fused2.conv_29',
+                   ('layer4.0.conv2.conv_30', 'layer4.0.bn2'): 'layer4.0.fused2.conv_30',
+                   ('layer4.0.conv2.conv_31', 'layer4.0.bn2'): 'layer4.0.fused2.conv_31',
+
+                   ('layer4.0.downsample.0.conv_0', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_0',
+                   ('layer4.0.downsample.0.conv_1', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_1',
+                   ('layer4.0.downsample.0.conv_2', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_2',
+                   ('layer4.0.downsample.0.conv_3', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_3',
+                   ('layer4.0.downsample.0.conv_4', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_4',
+                   ('layer4.0.downsample.0.conv_5', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_5',
+                   ('layer4.0.downsample.0.conv_6', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_6',
+                   ('layer4.0.downsample.0.conv_7', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_7',
+                   ('layer4.0.downsample.0.conv_8', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_8',
+                   ('layer4.0.downsample.0.conv_9', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_9',
+                   ('layer4.0.downsample.0.conv_10', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_10',
+                   ('layer4.0.downsample.0.conv_11', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_11',
+                   ('layer4.0.downsample.0.conv_12', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_12',
+                   ('layer4.0.downsample.0.conv_13', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_13',
+                   ('layer4.0.downsample.0.conv_14', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_14',
+                   ('layer4.0.downsample.0.conv_15', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_15',
+                   }
 
     for key, data in key_map.items():
         fuse_conv_and_bn(new_state_dict, key[0], key[1], data)
