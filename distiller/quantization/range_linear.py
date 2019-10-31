@@ -1280,34 +1280,35 @@ class FakeLinearQuantization(nn.Module):
         # back-prop with multiple GPUs, claiming a variable required for gradient calculation has been modified
         # in-place. Not clear why, since it's not used in any calculations that keep a gradient.
         # It works fine with a single GPU. TODO: Debug...
-        if self.training:
-            with torch.no_grad():
-                current_min, current_max = get_tensor_min_max(input)
-            self.iter_count += 1
-            self.tracked_min_biased.data, self.tracked_min.data = update_ema(self.tracked_min_biased.data,
-                                                                             current_min, self.ema_decay,
-                                                                             self.iter_count)
-            self.tracked_max_biased.data, self.tracked_max.data = update_ema(self.tracked_max_biased.data,
-                                                                             current_max, self.ema_decay,
-                                                                             self.iter_count)
+        # if self.training:
+        with torch.no_grad():
+            current_min, current_max = get_tensor_min_max(input)
+        self.iter_count += 1
+        self.tracked_min_biased.data, self.tracked_min.data = update_ema(self.tracked_min_biased.data,
+                                                                         current_min, self.ema_decay,
+                                                                         self.iter_count)
+        self.tracked_max_biased.data, self.tracked_max.data = update_ema(self.tracked_max_biased.data,
+                                                                         current_max, self.ema_decay,
+                                                                         self.iter_count)
 
         if self.mode == LinearQuantMode.SYMMETRIC:
             max_abs = max(abs(self.tracked_min), abs(self.tracked_max))
             actual_min, actual_max = -max_abs, max_abs
-            if self.training:
-                self.scale.data, self.zero_point.data = symmetric_linear_quantization_params(self.num_bits, max_abs)
+            # if self.training:
+            self.scale.data, self.zero_point.data = symmetric_linear_quantization_params(self.num_bits, max_abs)
         else:
             actual_min, actual_max = self.tracked_min, self.tracked_max
             signed = self.mode == LinearQuantMode.ASYMMETRIC_SIGNED
-            if self.training:
-                self.scale.data, self.zero_point.data = asymmetric_linear_quantization_params(self.num_bits,
+            # if self.training:
+            self.scale.data, self.zero_point.data = asymmetric_linear_quantization_params(self.num_bits,
                                                                                               self.tracked_min,
                                                                                               self.tracked_max,
                                                                                               signed=signed)
 
         input = clamp(input, actual_min.item(), actual_max.item(), False)
         input = LinearQuantizeSTE.apply(input, self.scale, self.zero_point, self.dequantize, False)
-        # print('{0} {1}'.format(self.training, self.scale.item()))
+        if(not self.training):
+            print('{0} {1}'.format(self.training, self.scale.item()))
         return input
 
     def extra_repr(self):
@@ -1388,8 +1389,10 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             else:
                 m = self.model
 
+            # print('Entering FakeLinearQuantization')
             m.inputs_quant = FakeLinearQuantization(self.num_bits_inputs, self.mode, self.decay,
                                                     dequantize=True, inplace=False)
+            # print('input scale {0}'.format(m.inputs_quant.scale))
             m.__class__.original_forward = m.__class__.forward
             m.__class__.forward = inputs_quantize_wrapped_forward
 
