@@ -20,6 +20,7 @@ import argparse
 import math
 import random
 import time
+import numpy as np
 
 import glob, os, sys 
 
@@ -52,7 +53,7 @@ def _round(x):
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    transforms.Resize(224),
+    transforms.Resize(224), # 224 -> 220
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
@@ -62,7 +63,7 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    transforms.Resize(224),
+    transforms.Resize(224), # 224 -> 220
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -162,8 +163,14 @@ def train(net, compression_scheduler, epochs, optimizer, criterion, args):
     print("Spent {} min".format((end_t - start_t)/60))
     msglogger.info("Spent {} min".format((end_t - start_t)/60))
 
+def dump_to_npy(name, tensor):
+    fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
+    fileName = os.path.join(fileDumpPath, name)
+    tensorToNumpy = tensor.detach().cpu().numpy()
+    np.save(fileName, tensorToNumpy)
+
 def test(model, criterion):
-    dump_act = None
+    dump_act = 1
     correct = 0
     total = 0
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
@@ -172,6 +179,7 @@ def test(model, criterion):
         for batch_idx, (images, labels) in enumerate(testloader):
             if(dump_act == None or (dump_act != None and batch_idx == dump_act)):
                 images, labels = images.cuda(), labels.cuda()
+                # dump_to_npy(name= 'input.activation.int8.'+str(batch_idx), tensor=images)
                 outputs = model(images)
                 classerr.add(outputs.data, labels)
 
@@ -236,6 +244,8 @@ model = resnet_cifar.resnet10_cifar(pretrained=True, ch_group=None, fusion=True)
 
 compress="../quantization/quant_aware_train/quant_aware_train_linear_quant.yaml"
 model, compression_scheduler, epochs, optimizer, criterion, args = configure(model, compress)
+model.cuda()
+model.eval()
 filename = "1028" # log name
 model_name = "1028" # model name
 logName = "./logging/resnet10/"+filename+".log"

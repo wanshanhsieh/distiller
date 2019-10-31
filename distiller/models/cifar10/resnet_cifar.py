@@ -45,17 +45,18 @@ import numpy as np
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test')
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
 
 model_saved = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191023_resnet10_fp32_fused_-128_127_224x224_resize', 'checkpoint_fuse.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test', 'checkpoint_220x_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test', 'checkpoint_220x220_retrain_2.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth'),
     'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
 }
 
 NUM_CLASSES = 10
+printLayerInfo = False
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -358,8 +359,8 @@ class BasicBlockFused(nn.Module):
             residual = out = x
 
         if self.block_gates[0]:
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input.activation', tensor=_input)
+            # if (dump_act != None):
+            #     dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input.activation', tensor=_input)
             out = self.fused1(_input)
             if (dump_act != None):
                 dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1.activation', tensor=out)
@@ -388,9 +389,12 @@ class BasicBlockFused(nn.Module):
             dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder.activation', tensor=out)
 
         out = self.relu2(out)
-        if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder_relu.activation', tensor=out)
-
+        if self.downsample is not None:
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder_relu.activation', tensor=out)
+        else: ## no identity
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2_relu.activation', tensor=out)
         return out
 
 class ResNetCifar(nn.Module):
@@ -559,8 +563,10 @@ class ResNetCifarReshape(nn.Module):
         self.avgpool = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
         if (ch_group == None):
             self.fc = nn.Linear(256 * block.expansion, num_classes)
+            # self.fc1024 = nn.Linear(4 * 256 * block.expansion, num_classes)
         else:
             self.fc = SlicingLinearBlock(256 * block.expansion, num_classes)
+            # self.fc1024 = nn.Linear(4 * 256 * block.expansion, num_classes)
         self.dropout = nn.Dropout()
 
         for m in self.modules():
@@ -657,7 +663,13 @@ class ResNetCifarReshape(nn.Module):
         # print('avgpool output 3 {0}'.format(x.size()))
 
         x = x.view(-1, x.size(1))
+        print('fc input {0}'.format(x.size()))
         x = self.fc(x)
+
+        # x = x.view(-1, x.size(1)*x.size(2)*x.size(3))
+        # print('fc input {0}'.format(x.size()))
+        # x = self.fc1024(x)
+
         # print('---------------------------------')
         # print('fc output {0}'.format(x.size()))
 
@@ -739,6 +751,180 @@ class ResNetCifarFused(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, dump_act=None):
+        global printLayerInfo
+
+        if (printLayerInfo):
+            print('input {0}'.format(x.size()))
+        if(dump_act != None):
+            dump_to_npy(name=str(dump_act)+'.input.activation', tensor=x)
+
+        if (printLayerInfo):
+            print('fused1')
+        x = self.fused1(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv1.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv1.weight', tensor=self.fused1.weight)
+            dump_to_npy(name=str(dump_act) + '.conv1.bias', tensor=self.fused1.bias)
+        x = self.relu1(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv1_relu.activation', tensor=x)
+
+        if (printLayerInfo):
+            print('fused2')
+        x = self.fused2(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv2.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv2.weight', tensor=self.fused2.weight)
+            dump_to_npy(name=str(dump_act) + '.conv2.bias', tensor=self.fused2.bias)
+        x = self.relu2(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv2_relu.activation', tensor=x)
+
+        if (printLayerInfo):
+            print('fused3')
+        x = self.fused3(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv3.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.conv3.weight', tensor=self.fused3.weight)
+            dump_to_npy(name=str(dump_act) + '.conv3.bias', tensor=self.fused3.bias)
+        x = self.relu3(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.conv3_relu.activation', tensor=x)
+
+        if (printLayerInfo):
+            print('maxpool input {0}'.format(x.size()))
+        x = self.maxpool(x)
+        x = self.dropout(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.maxpooling.activation', tensor=x)
+        if (printLayerInfo):
+            print('maxpool output {0}'.format(x.size()))
+
+        if (printLayerInfo):
+            print('layer1')
+        x = self.layer1((x, 1, dump_act))
+        if (printLayerInfo):
+            print('layer1 output {0}'.format(x.size()))
+
+        if (printLayerInfo):
+            print('layer2')
+        x = self.layer2((x, 2, dump_act))
+        # x = self.dropout(x)
+        if (printLayerInfo):
+            print('layer2 output {0}'.format(x.size()))
+
+        if (printLayerInfo):
+            print('layer3')
+        x = self.layer3((x, 3, dump_act))
+        # x = self.dropout(x)
+        if (printLayerInfo):
+            print('layer3 output {0}'.format(x.size()))
+
+        if (printLayerInfo):
+            print('layer4')
+        x = self.layer4((x, 4, dump_act))
+        # x = self.dropout(x)
+        if (printLayerInfo):
+            print('layer4 output {0}'.format(x.size()))
+
+        if (printLayerInfo):
+            print('avgpool input {0}'.format(x.size()))
+        x = self.avgpool(x)
+        if (printLayerInfo):
+            print('avgpool output {0}'.format(x.size()))
+
+        if(printLayerInfo):
+            print('fc')
+        x = x.view(-1, x.size(1))
+        x = self.fc(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.fc.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.fc.weight', tensor=self.fc.weight)
+            dump_to_npy(name=str(dump_act) + '.fc.bias', tensor=self.fc.bias)
+        if (printLayerInfo):
+            print('fc output {0}'.format(x.size()))
+
+        return x
+
+class ResNetCifarReshapeFused(nn.Module):
+
+    def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None):
+        self.nlayers = 0
+        self.ch_group = ch_group
+        # Each layer manages its own gates
+        self.layer_gates = []
+        for layer in range(4):
+            # For each of the 3 layers, create block gates: each block has two layers
+            self.layer_gates.append([])  # [True, True] * layers[layer])
+            for blk in range(layers[layer]):
+                self.layer_gates[layer].append([True, True])
+
+        self.inplanes = 32  # 64
+        super(ResNetCifarReshapeFused, self).__init__()
+
+        self.fused1 = nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=True)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        if (self.ch_group == None):
+            self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+        else:
+            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
+        self.relu2 = nn.ReLU(inplace=True)
+
+        if (self.ch_group == None):
+            self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
+        else:
+            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=8)
+        self.relu3 = nn.ReLU(inplace=True)
+
+        self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1))  # left, right, top, bottom
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+
+        self.layer1 = self._make_layer(self.layer_gates[0], block, 32, layers[0], stride=1, ch_group=ch_group)
+        self.layer2 = self._make_layer(self.layer_gates[1], block, 64, layers[1], stride=2, ch_group=ch_group)
+        self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group)
+        self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group)
+
+        self.avgpool = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
+
+        if (ch_group == None):
+            self.fc = nn.Linear(256 * block.expansion, num_classes)
+            # self.fc1024 = nn.Linear(4 * 256 * block.expansion, num_classes)
+        else:
+            self.fc = SlicingLinearBlock(256 * block.expansion, num_classes)
+            # self.fc1024 = SlicingLinearBlock(4 * 256 * block.expansion, num_classes)
+        self.dropout = nn.Dropout()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
+        downsample = None
+
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            if (ch_group == None):
+                downsample = nn.Conv2d(self.inplanes, planes * block.expansion, \
+                                       kernel_size=1, stride=stride, bias=True)
+            else:
+                downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
+                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=8)
+        layers = []
+        layers.append(block(layer_gates[0], self.inplanes, planes, \
+                            stride=stride, downsample=downsample, ch_group=ch_group))
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(layer_gates[i], self.inplanes, planes, \
+                                ch_group=ch_group))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x, dump_act=None):
         global testPhase
 
         # print('input {0}'.format(x.size()))
@@ -772,8 +958,11 @@ class ResNetCifarFused(nn.Module):
         if (dump_act != None):
             dump_to_npy(name=str(dump_act) + '.conv3_relu.activation', tensor=x)
 
+        x = self.poolPadding(x)
         # print('maxpool input {0}'.format(x.size()))
         x = self.maxpool(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.maxpooling.activation', tensor=x)
         x = self.dropout(x)
         # print('maxpool output {0}'.format(x.size()))
 
@@ -792,7 +981,10 @@ class ResNetCifarFused(nn.Module):
         x = self.dropout(x)
         # print('layer4 output {0}'.format(x.size()))
 
+        x = self.poolPadding(x)
         # print('avgpool input {0}'.format(x.size()))
+        x = self.avgpool(x)
+        x = self.avgpool(x)
         x = self.avgpool(x)
         # print('avgpool output {0}'.format(x.size()))
 
@@ -808,7 +1000,7 @@ class ResNetCifarFused(nn.Module):
 
 def resnet10_cifar(pretrained, ch_group, fusion, **kwargs):
     if(fusion == False):
-        model = ResNetCifarReshape(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
+        model = ResNetCifar(BasicBlock, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
     else:
         model = ResNetCifarFused(BasicBlockFused, [1, 1, 1, 1], **kwargs, ch_group=ch_group)
     if pretrained: # no module. prefix is allowed #

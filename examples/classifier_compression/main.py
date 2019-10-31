@@ -53,7 +53,7 @@ def _round(x):
 print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    transforms.Resize(224),
+    transforms.Resize(220), # 224 -> 220
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
@@ -63,7 +63,7 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    transforms.Resize(224),
+    transforms.Resize(220), # 224 -> 220
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -131,7 +131,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 # optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-optimizer = optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+optimizer = optim.Adam(net.parameters(), lr=0.002, betas=(0.8, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
 accRecord = []
 
 def dump_NCHW(file, input):
@@ -198,10 +198,10 @@ def test(epoch, dump_act=None):
         best_acc = acc
     accRecord[epoch] = acc
     if not args.test or (args.test and fusion):
-        print('Saving..')
+        print('Saving to '+str(args.output_file_name)+'.pth')
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        innerFolder = '20191026_resnet10_quant8_fused_sym_-128_127_224x224_resize'
+        innerFolder = '20191031_resnet10_fp32_fused_220x220'
         if not os.path.isdir('checkpoint/'+str(innerFolder)):
             os.makedirs('checkpoint/'+str(innerFolder))
         if (acc > best_acc):
