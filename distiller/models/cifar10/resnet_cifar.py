@@ -41,361 +41,23 @@ import torch.nn as nn
 import math
 from collections import OrderedDict
 import torch.utils.model_zoo as model_zoo
-import numpy as np
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.\\')))
+from resnet_slicing_block import *
+from resnet_basic_block import *
+from net_utils import *
 
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
 
 model_saved = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220', 'checkpoint_224x_ch8_fuse.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_ch8_224x', 'checkpoint_224x_ch8_retrain_5_fuse.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220', 'checkpoint_ch8_retrain_4.pth'),
-    'resnet20_cifar': os.path.join('D:', os.sep, 'playground', 'distiller', 'examples', 'classifier_compression', 'logs', '2019.10.08-110134', 'checkpoint_new.pth.tar')
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_ch8_224x', 'checkpoint_224x_ch8_fp32_fuse.pth'),
 }
 
 NUM_CLASSES = 10
 printLayerInfo = False
-
-def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
-
-def conv3x3_bias(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=True)
-
-def dump_to_npy(name, tensor):
-    fileName = os.path.join(fileDumpPath, name)
-    tensorToNumpy = tensor.detach().cpu().numpy()
-    np.save(fileName, tensorToNumpy)
-
-class SlicingLinearBlock(nn.Module):
-    def __init__(self, in_features, out_features, bias=False, ch_group=8):
-        super(SlicingLinearBlock, self).__init__()
-        self.num_of_slice = 1
-        self.ch_group = ch_group
-        try:
-            if(in_features%ch_group == 0):
-                self.num_of_slice = in_features//self.ch_group
-        except ValueError as e:
-            print("Exception: {0}() value error({1}): {2}".format(__name__, e.errno, e.strerror))
-            raise ValueError from e
-        except: ## handle other exceptions such as attribute errors
-            print("Unexpected error:", sys.exc_info()[0])
-            sys.exit()
-        self.fc_0 = nn.Linear(self.ch_group, out_features, bias=bias)
-        self.fc_1 = nn.Linear(self.ch_group, out_features, bias=bias)
-        if (self.num_of_slice > 2):
-            self.fc_2 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_3 = nn.Linear(self.ch_group, out_features, bias=bias)
-        if (self.num_of_slice > 4):
-            self.fc_4 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_5 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_6 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_7 = nn.Linear(self.ch_group, out_features, bias=bias)
-        if (self.num_of_slice > 8):
-            self.fc_8 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_9 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_10 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_11 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_12 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_13 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_14 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_15 = nn.Linear(self.ch_group, out_features, bias=bias)
-        if (self.num_of_slice > 16):
-            self.fc_16 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_17 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_18 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_19 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_20 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_21 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_22 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_23 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_24 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_25 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_26 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_27 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_28 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_29 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_30 = nn.Linear(self.ch_group, out_features, bias=bias)
-            self.fc_31 = nn.Linear(self.ch_group, out_features, bias=bias)
-
-    def forward(self, x):
-        _x = []
-        _start = 0
-        for i in range(0, self.num_of_slice, 1):
-            _x.append(torch.narrow(x, 1, _start, self.ch_group))
-            _start += self.ch_group
-        if (self.num_of_slice == 2):  # 16
-            out = self.fc_0(_x[0]) + self.fc_1(_x[1])
-        elif (self.num_of_slice == 4):  # 32
-            out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3])
-        elif (self.num_of_slice == 8):  # 64
-            out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
-                  + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7])
-        elif (self.num_of_slice == 16):  # 128
-            out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
-                  + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7]) \
-                  + self.fc_8(_x[8]) + self.fc_9(_x[9]) + self.fc_10(_x[10]) + self.fc_11(_x[11]) \
-                  + self.fc_12(_x[12]) + self.fc_13(_x[13]) + self.fc_14(_x[14]) + self.fc_15(_x[15])
-        elif (self.num_of_slice == 32):  # 256
-            out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
-                  + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7]) \
-                  + self.fc_8(_x[8]) + self.fc_9(_x[9]) + self.fc_10(_x[10]) + self.fc_11(_x[11]) \
-                  + self.fc_12(_x[12]) + self.fc_13(_x[13]) + self.fc_14(_x[14]) + self.fc_15(_x[15]) \
-                  + self.fc_16(_x[16]) + self.fc_17(_x[17]) + self.fc_18(_x[18]) + self.fc_19(_x[19]) \
-                  + self.fc_20(_x[20]) + self.fc_21(_x[21]) + self.fc_22(_x[22]) + self.fc_23(_x[23]) \
-                  + self.fc_24(_x[24]) + self.fc_25(_x[25]) + self.fc_26(_x[26]) + self.fc_27(_x[27]) \
-                  + self.fc_28(_x[28]) + self.fc_29(_x[29]) + self.fc_30(_x[30]) + self.fc_31(_x[31])
-        else:
-            print('Warning: num_of_slice is {0}, should not use SlicingLinearBlock'.format(self.num_of_slice))
-        return out
-
-class SlicingBlock(nn.Module):
-    def __init__(self, inplanes, planes, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8):
-        super(SlicingBlock, self).__init__()
-        self.num_of_slice = 1
-        self.ch_group = ch_group
-        try:
-            if(inplanes%ch_group == 0):
-                self.num_of_slice = inplanes//self.ch_group
-        except ValueError as e:
-            print("Exception: {0}() value error({1}): {2}".format(__name__, e.errno, e.strerror))
-            raise ValueError from e
-        except: ## handle other exceptions such as attribute errors
-            print("Unexpected error:", sys.exc_info()[0])
-            sys.exit()
-        self.conv_0 = nn.Conv2d(self.ch_group, \
-                    planes, \
-                    kernel_size=kernel_size, \
-                    stride=stride, \
-                    padding=padding, \
-                    bias=bias)
-        self.conv_1 = nn.Conv2d(self.ch_group, \
-                    planes, \
-                    kernel_size=kernel_size, \
-                    stride=stride, \
-                    padding=padding, \
-                    bias=bias)
-        if(self.num_of_slice > 2):
-            self.conv_2 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.conv_3 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-        if(self.num_of_slice > 4):
-            self.conv_4 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.conv_5 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.conv_6 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.conv_7 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-        if(self.num_of_slice > 8):
-            self.conv_8 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_9 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_10 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_11 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_12 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_13 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_14 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_15 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-        if (self.num_of_slice > 16):
-            self.conv_16 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_17 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_18 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_19 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_20 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_21 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_22 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_23 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_24 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_25 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_26 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_27 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_28 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_29 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_30 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.conv_31 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-
-    def forward(self, x):
-        _x = []
-        _start = 0
-        for i in range(0, self.num_of_slice, 1):
-            _x.append(torch.narrow(x, 1, _start, self.ch_group))
-            _start += self.ch_group
-        if(self.num_of_slice == 2): # 16
-            out = self.conv_0(_x[0])+self.conv_1(_x[1])
-        elif(self.num_of_slice == 4): # 32
-            out = self.conv_0(_x[0])+self.conv_1(_x[1])+self.conv_2(_x[2])+self.conv_3(_x[3])
-        elif(self.num_of_slice == 8): # 64
-            out = self.conv_0(_x[0])+self.conv_1(_x[1])+self.conv_2(_x[2])+self.conv_3(_x[3])\
-                 +self.conv_4(_x[4])+self.conv_5(_x[5])+self.conv_6(_x[6])+self.conv_7(_x[7])
-        elif (self.num_of_slice == 16):  # 128
-            out = self.conv_0(_x[0]) + self.conv_1(_x[1]) + self.conv_2(_x[2]) + self.conv_3(_x[3]) \
-                  + self.conv_4(_x[4]) + self.conv_5(_x[5]) + self.conv_6(_x[6]) + self.conv_7(_x[7]) \
-                  + self.conv_8(_x[8]) + self.conv_9(_x[9]) + self.conv_10(_x[10]) + self.conv_11(_x[11]) \
-                  + self.conv_12(_x[12]) + self.conv_13(_x[13]) + self.conv_14(_x[14]) + self.conv_15(_x[15])
-        elif (self.num_of_slice == 32):  # 256
-            out = self.conv_0(_x[0]) + self.conv_1(_x[1]) + self.conv_2(_x[2]) + self.conv_3(_x[3]) \
-                  + self.conv_4(_x[4]) + self.conv_5(_x[5]) + self.conv_6(_x[6]) + self.conv_7(_x[7]) \
-                  + self.conv_8(_x[8]) + self.conv_9(_x[9]) + self.conv_10(_x[10]) + self.conv_11(_x[11]) \
-                  + self.conv_12(_x[12]) + self.conv_13(_x[13]) + self.conv_14(_x[14]) + self.conv_15(_x[15]) \
-                  + self.conv_16(_x[16]) + self.conv_17(_x[17]) + self.conv_18(_x[18]) + self.conv_19(_x[19]) \
-                  + self.conv_20(_x[20]) + self.conv_21(_x[21]) + self.conv_22(_x[22]) + self.conv_23(_x[23]) \
-                  + self.conv_24(_x[24]) + self.conv_25(_x[25]) + self.conv_26(_x[26]) + self.conv_27(_x[27]) \
-                  + self.conv_28(_x[28]) + self.conv_29(_x[29]) + self.conv_30(_x[30]) + self.conv_31(_x[31])
-        else:
-            print('Warning: num_of_slice is {0}, should not use SlicingBlock'.format(self.num_of_slice))
-        return out
-
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
-        super(BasicBlock, self).__init__()
-        self.block_gates = block_gates
-        if(ch_group == None):
-            self.conv1 = conv3x3(inplanes, planes, stride)
-        else:
-            self.conv1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=ch_group)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
-        if (ch_group == None):
-            self.conv2 = conv3x3(planes, planes)
-        else:
-            self.conv2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=False, ch_group=ch_group)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.relu2 = nn.ReLU(inplace=False)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        if type(x) is tuple:
-            input = x[0]
-            dump_act = x[1]
-            residual = out = input
-        else:
-            dump_act = None
-            residual = out = x
-
-        if self.block_gates[0]:
-            # print('conv1 input {0}'.format(x.size()))
-            out = self.conv1(x)
-            # print('conv1 output {0}'.format(out.size()))
-            out = self.bn1(out)
-            out = self.relu1(out)
-
-        if self.block_gates[1]:
-            # print('conv2 input {0}'.format(out.size()))
-            out = self.conv2(out)
-            # print('conv2 output {0}'.format(out.size()))
-            out = self.bn2(out)
-
-        if self.downsample is not None:
-            # print('downsample input {0}'.format(x.size()))
-            residual = self.downsample(x)
-            # print('downsample output {0}'.format(residual.size()))
-
-        out += residual
-        if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.res2_adder', tensor=out)
-
-        out = self.relu2(out)
-
-        return out
-
-class BasicBlockFused(nn.Module):
-    expansion = 1
-
-    def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
-        super(BasicBlockFused, self).__init__()
-        self.block_gates = block_gates
-        if (ch_group == None):
-            self.fused1 = conv3x3_bias(inplanes, planes, stride)
-        else:
-            self.fused1 = SlicingBlock(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=ch_group)
-        self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
-        if (ch_group == None):
-            self.fused2 = conv3x3_bias(planes, planes)
-        else:
-            self.fused2 = SlicingBlock(planes, planes, stride=1, padding=1, bias=True, ch_group=ch_group)
-        self.relu2 = nn.ReLU(inplace=False)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        global testPhase
-        if type(x) is tuple:
-            _input = x[0]
-            layerId = x[1]
-            dump_act = x[2]
-            residual = out = _input
-        else:
-            layerId = 0
-            dump_act = None
-            residual = out = x
-
-        if self.block_gates[0]:
-            # if (dump_act != None):
-            #     dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input.activation', tensor=_input)
-            out = self.fused1(_input)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1.activation', tensor=out)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.weight', tensor=self.fused1.weight)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.bias', tensor=self.fused1.bias)
-            out = self.relu1(out)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1_relu.activation', tensor=out)
-
-        if self.block_gates[1]:
-            out = self.fused2(out)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2.activation', tensor=out)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.weight', tensor=self.fused2.weight)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.bias', tensor=self.fused2.bias)
-
-        if self.downsample is not None:
-            residual = self.downsample(_input)
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_match.activation', tensor=residual)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.weight', tensor=self.downsample.weight)
-                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.bias', tensor=self.downsample.bias)
-
-        out += residual
-        if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder.activation', tensor=out)
-
-        out = self.relu2(out)
-        if self.downsample is not None:
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_adder_relu.activation', tensor=out)
-        else: ## no identity
-            if (dump_act != None):
-                dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2_relu.activation', tensor=out)
-        return out
 
 class ResNetCifar(nn.Module):
     def __init__(self, block, layers, num_classes=NUM_CLASSES, ch_group=None):
@@ -417,13 +79,13 @@ class ResNetCifar(nn.Module):
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
+            self.conv2 = SlicingBlockFused(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn2 = nn.BatchNorm2d(16)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
         else:
-            self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
+            self.conv3 = SlicingBlockFused(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.bn3 = nn.BatchNorm2d(32)
         self.relu3 = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -432,7 +94,7 @@ class ResNetCifar(nn.Module):
         self.layer3 = self._make_layer(self.layer_gates[2], block, 128, layers[2], stride=2, ch_group=ch_group)
         self.layer4 = self._make_layer(self.layer_gates[3], block, 256, layers[3], stride=2, ch_group=ch_group)
         self.avgpool = nn.AvgPool2d(7, stride=7) #nn.AdaptiveAvgPool2d(1)
-        if (ch_group == None):
+        if (self.ch_group == None):
             self.fc = nn.Linear(256 * block.expansion, num_classes)
         else:
             self.fc = SlicingLinearBlock(256 * block.expansion, num_classes)
@@ -458,7 +120,7 @@ class ResNetCifar(nn.Module):
                 )
             else:
                 downsample = nn.Sequential(
-                    SlicingBlock(self.inplanes, planes * block.expansion, \
+                    SlicingBlockFused(self.inplanes, planes * block.expansion, \
                               kernel_size=1, stride=stride, padding=0, bias=False, ch_group=ch_group),
                     nn.BatchNorm2d(planes * block.expansion),
                 )
@@ -501,6 +163,7 @@ class ResNetCifar(nn.Module):
         # print('maxpool output {0}'.format(x.size()))
 
         x = self.layer1(x)
+        x = self.dropout(x)
         # print('layer1 output {0}'.format(x.size()))
 
         x = self.layer2(x)
@@ -508,7 +171,7 @@ class ResNetCifar(nn.Module):
         # print('layer2 output {0}'.format(x.size()))
 
         x = self.layer3(x)
-        # x = self.dropout(x)
+        x = self.dropout(x)
         # print('layer3 output {0}'.format(x.size()))
 
         x = self.layer4(x)
@@ -544,15 +207,15 @@ class ResNetCifarReshape(nn.Module):
         self.relu1 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn2 = nn.BatchNorm2d(16)
         else:
             self.conv2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
-        self.bn2 = nn.BatchNorm2d(16)
         self.relu2 = nn.ReLU(inplace=True)
         if (self.ch_group == None):
             self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn3 = nn.BatchNorm2d(32)
         else:
             self.conv3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
-        self.bn3 = nn.BatchNorm2d(32)
         self.relu3 = nn.ReLU(inplace=True)
         self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1)) # left, right, top, bottom
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
@@ -591,7 +254,7 @@ class ResNetCifarReshape(nn.Module):
                 downsample = nn.Sequential(
                     SlicingBlock(self.inplanes, planes * block.expansion, \
                               kernel_size=1, stride=stride, padding=0, bias=False, ch_group=ch_group),
-                    nn.BatchNorm2d(planes * block.expansion),
+                    # nn.BatchNorm2d(planes * block.expansion),
                 )
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
@@ -697,13 +360,13 @@ class ResNetCifarFused(nn.Module):
         if (self.ch_group == None):
             self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused2 = SlicingBlockFused(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=True)
 
         if (self.ch_group == None):
             self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused3 = SlicingBlockFused(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu3 = nn.ReLU(inplace=True)
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -738,7 +401,7 @@ class ResNetCifarFused(nn.Module):
                 downsample = nn.Conv2d(self.inplanes, planes * block.expansion, \
                                        kernel_size=1, stride=stride, bias=True)
             else:
-                downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
+                downsample = SlicingBlockFused(self.inplanes, planes * block.expansion, \
                                           kernel_size=1, stride=stride, padding=0, bias=True, ch_group=ch_group)
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
@@ -868,13 +531,13 @@ class ResNetCifarReshapeFused(nn.Module):
         if (self.ch_group == None):
             self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused2 = SlicingBlock(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused2 = SlicingBlockFused(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=True)
 
         if (self.ch_group == None):
             self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused3 = SlicingBlock(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused3 = SlicingBlockFused(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
         self.relu3 = nn.ReLU(inplace=True)
 
         self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1))  # left, right, top, bottom
@@ -912,7 +575,7 @@ class ResNetCifarReshapeFused(nn.Module):
                 downsample = nn.Conv2d(self.inplanes, planes * block.expansion, \
                                        kernel_size=1, stride=stride, bias=True)
             else:
-                downsample = SlicingBlock(self.inplanes, planes * block.expansion, \
+                downsample = SlicingBlockFused(self.inplanes, planes * block.expansion, \
                                           kernel_size=1, stride=stride, padding=0, bias=True, ch_group=ch_group)
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
@@ -1062,7 +725,8 @@ def fuse_conv_and_bn(dict, conv_key, bn_key, fuse_key):
     beta = dict[bn_key+'.bias']
     b = mean.new_zeros(mean.shape)
     w = w * (gamma / var_sqrt).reshape([dict[conv_key+'.weight'].size(0), 1, 1, 1])
-    b = ((b - mean) / var_sqrt) * gamma + beta
+    if('.' not in fuse_key or ('.' in fuse_key and 'conv_0' in fuse_key)):
+        b = ((b - mean) / var_sqrt) * gamma + beta
     dict[fuse_key+'.weight'] = w
     dict[fuse_key+'.bias'] = b
 
@@ -1095,28 +759,22 @@ if __name__ == '__main__':
                 }
 
     key_ch8_map = {('conv1', 'bn1'): 'fused1',
-
                    ('conv2.conv_0', 'bn2'): 'fused2.conv_0',
                    ('conv2.conv_1', 'bn2'): 'fused2.conv_1',
-
                    ('conv3.conv_0', 'bn3'): 'fused3.conv_0',
                    ('conv3.conv_1', 'bn3'): 'fused3.conv_1',
-
                    ('layer1.0.conv1.conv_0', 'layer1.0.bn1'): 'layer1.0.fused1.conv_0',
                    ('layer1.0.conv1.conv_1', 'layer1.0.bn1'): 'layer1.0.fused1.conv_1',
                    ('layer1.0.conv1.conv_2', 'layer1.0.bn1'): 'layer1.0.fused1.conv_2',
                    ('layer1.0.conv1.conv_3', 'layer1.0.bn1'): 'layer1.0.fused1.conv_3',
-
                    ('layer1.0.conv2.conv_0', 'layer1.0.bn2'): 'layer1.0.fused2.conv_0',
                    ('layer1.0.conv2.conv_1', 'layer1.0.bn2'): 'layer1.0.fused2.conv_1',
                    ('layer1.0.conv2.conv_2', 'layer1.0.bn2'): 'layer1.0.fused2.conv_2',
                    ('layer1.0.conv2.conv_3', 'layer1.0.bn2'): 'layer1.0.fused2.conv_3',
-
                    ('layer2.0.conv1.conv_0', 'layer2.0.bn1'): 'layer2.0.fused1.conv_0',
                    ('layer2.0.conv1.conv_1', 'layer2.0.bn1'): 'layer2.0.fused1.conv_1',
                    ('layer2.0.conv1.conv_2', 'layer2.0.bn1'): 'layer2.0.fused1.conv_2',
                    ('layer2.0.conv1.conv_3', 'layer2.0.bn1'): 'layer2.0.fused1.conv_3',
-
                    ('layer2.0.conv2.conv_0', 'layer2.0.bn2'): 'layer2.0.fused2.conv_0',
                    ('layer2.0.conv2.conv_1', 'layer2.0.bn2'): 'layer2.0.fused2.conv_1',
                    ('layer2.0.conv2.conv_2', 'layer2.0.bn2'): 'layer2.0.fused2.conv_2',
@@ -1125,12 +783,10 @@ if __name__ == '__main__':
                    ('layer2.0.conv2.conv_5', 'layer2.0.bn2'): 'layer2.0.fused2.conv_5',
                    ('layer2.0.conv2.conv_6', 'layer2.0.bn2'): 'layer2.0.fused2.conv_6',
                    ('layer2.0.conv2.conv_7', 'layer2.0.bn2'): 'layer2.0.fused2.conv_7',
-
                    ('layer2.0.downsample.0.conv_0', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_0',
                    ('layer2.0.downsample.0.conv_1', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_1',
                    ('layer2.0.downsample.0.conv_2', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_2',
                    ('layer2.0.downsample.0.conv_3', 'layer2.0.downsample.1'): 'layer2.0.downsample.conv_3',
-
                    ('layer3.0.conv1.conv_0', 'layer3.0.bn1'): 'layer3.0.fused1.conv_0',
                    ('layer3.0.conv1.conv_1', 'layer3.0.bn1'): 'layer3.0.fused1.conv_1',
                    ('layer3.0.conv1.conv_2', 'layer3.0.bn1'): 'layer3.0.fused1.conv_2',
@@ -1139,7 +795,6 @@ if __name__ == '__main__':
                    ('layer3.0.conv1.conv_5', 'layer3.0.bn1'): 'layer3.0.fused1.conv_5',
                    ('layer3.0.conv1.conv_6', 'layer3.0.bn1'): 'layer3.0.fused1.conv_6',
                    ('layer3.0.conv1.conv_7', 'layer3.0.bn1'): 'layer3.0.fused1.conv_7',
-
                    ('layer3.0.conv2.conv_0', 'layer3.0.bn2'): 'layer3.0.fused2.conv_0',
                    ('layer3.0.conv2.conv_1', 'layer3.0.bn2'): 'layer3.0.fused2.conv_1',
                    ('layer3.0.conv2.conv_2', 'layer3.0.bn2'): 'layer3.0.fused2.conv_2',
@@ -1156,7 +811,6 @@ if __name__ == '__main__':
                    ('layer3.0.conv2.conv_13', 'layer3.0.bn2'): 'layer3.0.fused2.conv_13',
                    ('layer3.0.conv2.conv_14', 'layer3.0.bn2'): 'layer3.0.fused2.conv_14',
                    ('layer3.0.conv2.conv_15', 'layer3.0.bn2'): 'layer3.0.fused2.conv_15',
-
                    ('layer3.0.downsample.0.conv_0', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_0',
                    ('layer3.0.downsample.0.conv_1', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_1',
                    ('layer3.0.downsample.0.conv_2', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_2',
@@ -1165,7 +819,6 @@ if __name__ == '__main__':
                    ('layer3.0.downsample.0.conv_5', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_5',
                    ('layer3.0.downsample.0.conv_6', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_6',
                    ('layer3.0.downsample.0.conv_7', 'layer3.0.downsample.1'): 'layer3.0.downsample.conv_7',
-
                    ('layer4.0.conv1.conv_0', 'layer4.0.bn1'): 'layer4.0.fused1.conv_0',
                    ('layer4.0.conv1.conv_1', 'layer4.0.bn1'): 'layer4.0.fused1.conv_1',
                    ('layer4.0.conv1.conv_2', 'layer4.0.bn1'): 'layer4.0.fused1.conv_2',
@@ -1182,7 +835,6 @@ if __name__ == '__main__':
                    ('layer4.0.conv1.conv_13', 'layer4.0.bn1'): 'layer4.0.fused1.conv_13',
                    ('layer4.0.conv1.conv_14', 'layer4.0.bn1'): 'layer4.0.fused1.conv_14',
                    ('layer4.0.conv1.conv_15', 'layer4.0.bn1'): 'layer4.0.fused1.conv_15',
-
                    ('layer4.0.conv2.conv_0', 'layer4.0.bn2'): 'layer4.0.fused2.conv_0',
                    ('layer4.0.conv2.conv_1', 'layer4.0.bn2'): 'layer4.0.fused2.conv_1',
                    ('layer4.0.conv2.conv_2', 'layer4.0.bn2'): 'layer4.0.fused2.conv_2',
@@ -1215,7 +867,6 @@ if __name__ == '__main__':
                    ('layer4.0.conv2.conv_29', 'layer4.0.bn2'): 'layer4.0.fused2.conv_29',
                    ('layer4.0.conv2.conv_30', 'layer4.0.bn2'): 'layer4.0.fused2.conv_30',
                    ('layer4.0.conv2.conv_31', 'layer4.0.bn2'): 'layer4.0.fused2.conv_31',
-
                    ('layer4.0.downsample.0.conv_0', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_0',
                    ('layer4.0.downsample.0.conv_1', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_1',
                    ('layer4.0.downsample.0.conv_2', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_2',
@@ -1234,7 +885,7 @@ if __name__ == '__main__':
                    ('layer4.0.downsample.0.conv_15', 'layer4.0.downsample.1'): 'layer4.0.downsample.conv_15',
                    }
 
-    for key, data in key_map.items():
+    for key, data in key_ch8_map.items():
         fuse_conv_and_bn(new_state_dict, key[0], key[1], data)
 
     torch.save(new_state_dict, model_saved['resnet10_cifar'])

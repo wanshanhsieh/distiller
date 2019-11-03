@@ -100,7 +100,7 @@ def create_model(pretrained, dataset, arch, parallel=True, device_ids=None):
         if dataset == 'imagenet':
             model, cadene = _create_imagenet_model(arch, pretrained)
         elif dataset == 'cifar10':
-            model = _create_cifar10_model(arch, pretrained, ch_group=None, fusion=True)
+            model = _create_cifar10_model(arch, pretrained, ch_group=8, fusion=True)
         elif dataset == 'mnist':
             model = _create_mnist_model(arch, pretrained)
     except ValueError:
