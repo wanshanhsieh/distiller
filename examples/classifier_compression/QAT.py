@@ -170,7 +170,7 @@ def dump_to_npy(name, tensor):
     np.save(fileName, tensorToNumpy)
 
 def test(model, criterion):
-    dump_act = 1
+    dump_act = None
     correct = 0
     total = 0
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))
