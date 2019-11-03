@@ -27,17 +27,17 @@ key_map = {'fused1': 'conv1',
            'layer2.0.relu1.fake_q': 'res2_conv1',
            'layer2.0.fused2': 'res2_conv2',
            'layer2.0.downsample': 'res2_match',
-           'layer2.0.relu2.fake_q': 'res2_adder',
+           'layer2.0.relu2.fake_q': 'res2_conv2',
            'layer3.0.fused1': 'res3_conv1',
            'layer3.0.relu1.fake_q': 'res3_conv1',
            'layer3.0.fused2': 'res3_conv2',
            'layer3.0.downsample': 'res3_match',
-           'layer3.0.relu2.fake_q': 'res3_adder',
+           'layer3.0.relu2.fake_q': 'res3_conv2',
            'layer4.0.fused1': 'res4_conv1',
            'layer4.0.relu1.fake_q': 'res4_conv1',
            'layer4.0.fused2': 'res4_conv2',
            'layer4.0.downsample': 'res4_match',
-           'layer4.0.relu2.fake_q': 'res4_adder',
+           'layer4.0.relu2.fake_q': 'res4_conv2',
            'fc': 'fc',
            'inputs_quant': 'fc'
            }
@@ -225,35 +225,35 @@ if __name__ == '__main__':
 
     # trim_prefix()
     # torch.save(model_q, fileNameNew)
-    # parse_quant_info()
+    parse_quant_info()
     # quant_dequant_weight()
     # replace_with_dequant_value_and_save()
 
-    # outputFolder = '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test'
-    # name = 'scale_QAT_8626_b100_shift'
-    # dump_scale_info(outputFolder, name)
+    outputFolder = '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test'
+    name = 'scale_QAT_shift'
+    dump_scale_info(outputFolder, name)
 
-    name = '2.maxpooling.activation.npy'
-    fileName1 = os.path.join('checkpoint', \
-                            '20191030_resnet10_fp32_fused_220x220', \
-                            '20191030_pytorch_batch1_img2_hw_data', \
-                            name)
-    fileName2 = os.path.join('checkpoint', \
-                             '20191031_resnet10_fp32_fused_220x220', \
-                             '20191031_pytorch_input_batch100_0to9', \
-                             'input.activation.int8.0.npy')
-    try:
-        # tmpNpy1 = np.load(fileName1)
-        tmpNpy2 = np.load(fileName2)
-        # print(np.array_equal(tmpNpy1, tmpNpy2))
-        # print('max pooling')
-        print(tmpNpy2)
+    # name = '2.maxpooling.activation.npy'
+    # fileName1 = os.path.join('checkpoint', \
+    #                         '20191030_resnet10_fp32_fused_220x220', \
+    #                         '20191030_pytorch_batch1_img2_hw_data', \
+    #                         name)
+    # fileName2 = os.path.join('checkpoint', \
+    #                          '20191031_resnet10_fp32_fused_220x220', \
+    #                          '20191031_pytorch_input_batch100_0to9', \
+    #                          'input.activation.int8.0.npy')
+    # try:
+    #     tmpNpy1 = np.load(fileName1)
+    #     tmpNpy2 = np.load(fileName2)
+    #     print(np.array_equal(tmpNpy1, tmpNpy2))
+    #     print('max pooling')
+    #     print(tmpNpy2)
 
-        # print('res1_input')
-        # print(tmpNpy1)
+    #     print('res1_input')
+    #     print(tmpNpy1)
 
-    except IOError as e:
-        print('[Error] no such file {0}'.format(name))
+    # except IOError as e:
+    #     print('[Error] no such file {0}'.format(name))
 
     # for name in std_names:
     #     fileName = os.path.join('checkpoint', \
