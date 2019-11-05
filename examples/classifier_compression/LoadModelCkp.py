@@ -1,9 +1,12 @@
 import os
+import sys
 import torch
 import struct
 import numpy as np
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.\\')))
+from KeyMap import *
 
-fileName = os.path.join('checkpoint', '20191027_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_train_to_get_test.pth')
+fileName = os.path.join('checkpoint', '20191104_resnet10_quant_ch8_224x', 'checkpoint_224x_fuse_b100.pth')
 # fileName = os.path.join('checkpoint', '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test', 'checkpoint_8626.pth')
 fileNameNew = os.path.join('checkpoint', '20191024_resnet10_quant8_fused_sym_-128_127_224x224_resize', 'checkpoint_dequant_4.pth')
 
@@ -12,42 +15,6 @@ model_q = torch.load(fileName)
 _my_dict = {}
 _my_dict_tmp = {}
 _my_dict_fuse = {}
-
-key_map = {'fused1': 'conv1',
-           'relu1.fake_q': 'conv1',
-           'fused2': 'conv2',
-           'relu2.fake_q': 'conv2',
-           'fused3': 'conv3',
-           'relu3.fake_q': 'conv3',
-           'layer1.0.fused1': 'res1_conv1',
-           'layer1.0.relu1.fake_q': 'res1_conv1',
-           'layer1.0.fused2': 'res1_conv2',
-           'layer1.0.relu2.fake_q': 'res1_conv2',
-           'layer2.0.fused1': 'res2_conv1',
-           'layer2.0.relu1.fake_q': 'res2_conv1',
-           'layer2.0.fused2': 'res2_conv2',
-           'layer2.0.downsample': 'res2_match',
-           'layer2.0.relu2.fake_q': 'res2_conv2',
-           'layer3.0.fused1': 'res3_conv1',
-           'layer3.0.relu1.fake_q': 'res3_conv1',
-           'layer3.0.fused2': 'res3_conv2',
-           'layer3.0.downsample': 'res3_match',
-           'layer3.0.relu2.fake_q': 'res3_conv2',
-           'layer4.0.fused1': 'res4_conv1',
-           'layer4.0.relu1.fake_q': 'res4_conv1',
-           'layer4.0.fused2': 'res4_conv2',
-           'layer4.0.downsample': 'res4_match',
-           'layer4.0.relu2.fake_q': 'res4_conv2',
-           'fc': 'fc',
-           'inputs_quant': 'fc'
-           }
-
-std_names = ['conv1', 'conv2', 'conv3', \
-             'res1_conv1', 'res1_conv2', \
-             'res2_conv1', 'res2_conv2', 'res2_match', \
-             'res3_conv1', 'res3_conv2', 'res3_match', \
-             'res4_conv1', 'res4_conv2', 'res4_match', \
-             'fc']
 
 def get_clamp_limit(bit_size=8, signed=True):
     signed_limit = 2 ** (bit_size - 1)
@@ -76,18 +43,23 @@ def parse_quant_info():
         items.remove(items[len(items) - 1])
         new_key = str('.'.join(items))
         # weight quant #
-        if(('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) \
-                and '.weight' in key and '.weight_scale' not in key and '.weight_zero_point' not in key):
-            if(new_key not in _my_dict):
-                _my_dict[new_key] = { 'weight': [],
-                                      'w_scale': [],
-                                      'w_zero_point': [],
-                                      'bias': [],
-                                      'b_scale': [],
-                                      'b_zero_point': []}
-            if (new_key in _my_dict and len(_my_dict[new_key]['weight']) == 0):
-                _my_dict[new_key]['weight'].append(data)
-        elif(('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) and '.weight_scale' in key):
+        # if(('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) \
+        #         and '.weight' in key and '.weight_scale' not in key and '.weight_zero_point' not in key):
+        #     if(new_key not in _my_dict):
+        #         _my_dict[new_key] = { 'weight': [],
+        #                               'w_scale': [],
+        #                               'w_zero_point': [],
+        #                               'bias': [],
+        #                               'b_scale': [],
+        #                               'b_zero_point': []}
+        #     if (new_key in _my_dict and len(_my_dict[new_key]['weight']) == 0):
+        #         _my_dict[new_key]['weight'].append(data)
+        if(('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) and '.weight_scale' in key):
+            if (new_key not in _my_dict):
+                _my_dict[new_key] = {'w_scale': [],
+                                     'w_zero_point': [],
+                                     'b_scale': [],
+                                     'b_zero_point': []}
             if(new_key in _my_dict and len(_my_dict[new_key]['w_scale']) == 0):
                 _my_dict[new_key]['w_scale'].append(data)
         elif (('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) and '.weight_zero_point' in key):
@@ -102,10 +74,10 @@ def parse_quant_info():
             _my_dict[new_key]['scale'].append(data)
         elif('fake_q' in key and '.zero_point' in key):
             _my_dict[new_key]['zero_point'].append(data)
-        elif (('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) \
-              and '.bias' in key and '.bias_scale' not in key and '.bias_zero_point' not in key):
-            if (new_key in _my_dict and len(_my_dict[new_key]['bias']) == 0):
-                _my_dict[new_key]['bias'].append(data)
+        # elif (('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) \
+        #       and '.bias' in key and '.bias_scale' not in key and '.bias_zero_point' not in key):
+        #     if (new_key in _my_dict and len(_my_dict[new_key]['bias']) == 0):
+        #         _my_dict[new_key]['bias'].append(data)
         elif (('conv' in key or 'fc' in key or 'downsample' in key or 'downsample.0' in key or 'fuse' in key) and '.bias_scale' in key):
             if (new_key in _my_dict and len(_my_dict[new_key]['b_scale']) == 0):
                 _my_dict[new_key]['b_scale'].append(data)
@@ -201,16 +173,16 @@ def dump_weight_and_bias_to_file():
 def dump_scale_info(outputFolder, name):
     fileNameDump = os.path.join('checkpoint', outputFolder, name+'.txt')
     with open(fileNameDump, "w") as text_file:
-        for key, data in key_map.items():
+        for key, data in key_ch8_map.items():
             weight_key = str('module.' + str(key) + '.weight_scale')
             bias_key = str('module.' + str(key) + '.bias_scale')
             image_key = str('module.' + str(key) + '.scale')
             if(weight_key in model_q):
                 text_file.writelines('config w\n')
                 text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[weight_key]).item()))
-            if (bias_key in model_q):
-                text_file.writelines('config b\n')
-                text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[bias_key]).item()))
+            # if (bias_key in model_q):
+            #     text_file.writelines('config b\n')
+            #     text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[bias_key]).item()))
             if (image_key in model_q):
                 text_file.writelines('config o\n')
                 text_file.writelines('{0} {1}\n'.format(data, torch.log2(model_q[image_key]).item()))
@@ -229,7 +201,7 @@ if __name__ == '__main__':
     # quant_dequant_weight()
     # replace_with_dequant_value_and_save()
 
-    outputFolder = '20191029_resnet10_quant8_fused_symm_-128_127_224x224_test'
+    outputFolder = '20191104_resnet10_quant_ch8_224x'
     name = 'scale_QAT_shift'
     dump_scale_info(outputFolder, name)
 
