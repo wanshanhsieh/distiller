@@ -1,5 +1,10 @@
+import os
+import sys
 import torch
 import torch.nn as nn
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.\\')))
+from net_utils import *
+from net_utils import NUM_CLASSES as NUM_CLASSES
 
 class SlicingLinearBlock(nn.Module):
     def __init__(self, in_features, out_features, bias=False, ch_group=8):
@@ -55,21 +60,95 @@ class SlicingLinearBlock(nn.Module):
     def forward(self, x):
         _x = []
         _start = 0
-        for i in range(0, self.num_of_slice, 1):
-            _x.append(torch.narrow(x, 1, _start, self.ch_group))
-            _start += self.ch_group
+        if (type(x) is tuple):
+            for i in range(0, self.num_of_slice, 1):
+                _x.append(torch.narrow(x[0], 1, _start, self.ch_group))
+                _start += self.ch_group
+            layerPrefix = x[1]
+            dump_act = x[2]
+        else:
+            for i in range(0, self.num_of_slice, 1):
+                _x.append(torch.narrow(x, 1, _start, self.ch_group))
+                _start += self.ch_group
+            layerPrefix = None
+            dump_act = None
+
         if (self.num_of_slice == 2):  # 16
             out = self.fc_0(_x[0]) + self.fc_1(_x[1])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.weight', tensor=self.fc_0.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.bias',   tensor=self.fc_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.weight', tensor=self.fc_1.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.bias',   tensor=self.fc_1.bias)
         elif (self.num_of_slice == 4):  # 32
             out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.weight', tensor=self.fc_0.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.bias',   tensor=self.fc_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.weight', tensor=self.fc_1.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.bias',   tensor=self.fc_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.weight', tensor=self.fc_2.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.bias',   tensor=self.fc_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.weight', tensor=self.fc_3.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.bias',   tensor=self.fc_3.bias)
         elif (self.num_of_slice == 8):  # 64
             out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
                   + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.weight', tensor=self.fc_0.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.bias',   tensor=self.fc_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.weight', tensor=self.fc_1.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.bias',   tensor=self.fc_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.weight', tensor=self.fc_2.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.bias',   tensor=self.fc_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.weight', tensor=self.fc_3.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.bias',   tensor=self.fc_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.weight', tensor=self.fc_4.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.bias',   tensor=self.fc_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.weight', tensor=self.fc_5.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.bias',   tensor=self.fc_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.weight', tensor=self.fc_6.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.bias',   tensor=self.fc_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.weight', tensor=self.fc_7.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.bias',   tensor=self.fc_7.bias)
         elif (self.num_of_slice == 16):  # 128
             out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
                   + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7]) \
                   + self.fc_8(_x[8]) + self.fc_9(_x[9]) + self.fc_10(_x[10]) + self.fc_11(_x[11]) \
                   + self.fc_12(_x[12]) + self.fc_13(_x[13]) + self.fc_14(_x[14]) + self.fc_15(_x[15])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.weight', tensor=self.fc_0.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.bias',   tensor=self.fc_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.weight', tensor=self.fc_1.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.bias',   tensor=self.fc_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.weight', tensor=self.fc_2.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.bias',   tensor=self.fc_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.weight', tensor=self.fc_3.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.bias',   tensor=self.fc_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.weight', tensor=self.fc_4.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.bias',   tensor=self.fc_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.weight', tensor=self.fc_5.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.bias',   tensor=self.fc_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.weight', tensor=self.fc_6.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.bias',   tensor=self.fc_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.weight', tensor=self.fc_7.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.bias',   tensor=self.fc_7.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_8.weight', tensor=self.fc_8.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_8.bias',   tensor=self.fc_8.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_9.weight', tensor=self.fc_9.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_9.bias',   tensor=self.fc_9.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_10.weight', tensor=self.fc_10.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_10.bias',   tensor=self.fc_10.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_11.weight', tensor=self.fc_11.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_11.bias',   tensor=self.fc_11.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_12.weight', tensor=self.fc_12.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_12.bias',   tensor=self.fc_12.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_13.weight', tensor=self.fc_13.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_13.bias',   tensor=self.fc_13.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_14.weight', tensor=self.fc_14.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_14.bias',   tensor=self.fc_14.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_15.weight', tensor=self.fc_15.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_15.bias',   tensor=self.fc_15.bias)
         elif (self.num_of_slice == 32):  # 256
             out = self.fc_0(_x[0]) + self.fc_1(_x[1]) + self.fc_2(_x[2]) + self.fc_3(_x[3]) \
                   + self.fc_4(_x[4]) + self.fc_5(_x[5]) + self.fc_6(_x[6]) + self.fc_7(_x[7]) \
@@ -79,273 +158,73 @@ class SlicingLinearBlock(nn.Module):
                   + self.fc_20(_x[20]) + self.fc_21(_x[21]) + self.fc_22(_x[22]) + self.fc_23(_x[23]) \
                   + self.fc_24(_x[24]) + self.fc_25(_x[25]) + self.fc_26(_x[26]) + self.fc_27(_x[27]) \
                   + self.fc_28(_x[28]) + self.fc_29(_x[29]) + self.fc_30(_x[30]) + self.fc_31(_x[31])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.weight', tensor=self.fc_0.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_0.bias',   tensor=self.fc_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.weight', tensor=self.fc_1.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_1.bias',   tensor=self.fc_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.weight', tensor=self.fc_2.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_2.bias',   tensor=self.fc_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.weight', tensor=self.fc_3.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_3.bias',   tensor=self.fc_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.weight', tensor=self.fc_4.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_4.bias',   tensor=self.fc_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.weight', tensor=self.fc_5.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_5.bias',   tensor=self.fc_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.weight', tensor=self.fc_6.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_6.bias',   tensor=self.fc_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.weight', tensor=self.fc_7.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_7.bias',   tensor=self.fc_7.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_8.weight', tensor=self.fc_8.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_8.bias',   tensor=self.fc_8.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_9.weight', tensor=self.fc_9.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_9.bias',   tensor=self.fc_9.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_10.weight', tensor=self.fc_10.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_10.bias',   tensor=self.fc_10.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_11.weight', tensor=self.fc_11.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_11.bias',   tensor=self.fc_11.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_12.weight', tensor=self.fc_12.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_12.bias',   tensor=self.fc_12.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_13.weight', tensor=self.fc_13.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_13.bias',   tensor=self.fc_13.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_14.weight', tensor=self.fc_14.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_14.bias',   tensor=self.fc_14.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_15.weight', tensor=self.fc_15.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_15.bias',   tensor=self.fc_15.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_16.weight', tensor=self.fc_16.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_16.bias',   tensor=self.fc_16.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_17.weight', tensor=self.fc_17.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_17.bias',   tensor=self.fc_17.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_18.weight', tensor=self.fc_18.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_18.bias',   tensor=self.fc_18.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_19.weight', tensor=self.fc_19.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_19.bias',   tensor=self.fc_19.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_20.weight', tensor=self.fc_20.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_20.bias',   tensor=self.fc_20.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_21.weight', tensor=self.fc_21.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_21.bias',   tensor=self.fc_21.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_22.weight', tensor=self.fc_22.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_22.bias',   tensor=self.fc_22.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_23.weight', tensor=self.fc_23.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_23.bias',   tensor=self.fc_23.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_24.weight', tensor=self.fc_24.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_24.bias',   tensor=self.fc_24.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_25.weight', tensor=self.fc_25.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_25.bias',   tensor=self.fc_25.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_26.weight', tensor=self.fc_26.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_26.bias',   tensor=self.fc_26.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_27.weight', tensor=self.fc_27.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_27.bias',   tensor=self.fc_27.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_28.weight', tensor=self.fc_28.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_28.bias',   tensor=self.fc_28.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_29.weight', tensor=self.fc_29.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_29.bias',   tensor=self.fc_29.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_30.weight', tensor=self.fc_30.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_30.bias',   tensor=self.fc_30.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_31.weight', tensor=self.fc_31.weight)
+                # dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.fc_31.bias',   tensor=self.fc_31.bias)
         else:
             print('Warning: num_of_slice is {0}, should not use SlicingLinearBlock'.format(self.num_of_slice))
-        return out
-
-class SlicingBlock(nn.Module):
-    def __init__(self, inplanes, planes, kernel_size=3, stride=1, padding=1, bias=False, ch_group=8):
-        super(SlicingBlock, self).__init__()
-        self.num_of_slice = 1
-        self.ch_group = ch_group
-        try:
-            if(inplanes%ch_group == 0):
-                self.num_of_slice = inplanes//self.ch_group
-        except ValueError as e:
-            print("Exception: {0}() value error({1}): {2}".format(__name__, e.errno, e.strerror))
-            raise ValueError from e
-        except: ## handle other exceptions such as attribute errors
-            print("Unexpected error:", sys.exc_info()[0])
-            sys.exit()
-        self.conv_0 = nn.Conv2d(self.ch_group, \
-                    planes, \
-                    kernel_size=kernel_size, \
-                    stride=stride, \
-                    padding=padding, \
-                    bias=bias)
-        self.bn_0 = nn.BatchNorm2d(planes)
-        self.conv_1 = nn.Conv2d(self.ch_group, \
-                    planes, \
-                    kernel_size=kernel_size, \
-                    stride=stride, \
-                    padding=padding, \
-                    bias=bias)
-        self.bn_1 = nn.BatchNorm2d(planes)
-        if(self.num_of_slice > 2):
-            self.conv_2 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_2 = nn.BatchNorm2d(planes)
-            self.conv_3 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_3 = nn.BatchNorm2d(planes)
-        if(self.num_of_slice > 4):
-            self.conv_4 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_4 = nn.BatchNorm2d(planes)
-            self.conv_5 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_5 = nn.BatchNorm2d(planes)
-            self.conv_6 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_6 = nn.BatchNorm2d(planes)
-            self.conv_7 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias)
-            self.bn_7 = nn.BatchNorm2d(planes)
-        if(self.num_of_slice > 8):
-            self.conv_8 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_8 = nn.BatchNorm2d(planes)
-            self.conv_9 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_9 = nn.BatchNorm2d(planes)
-            self.conv_10 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_10 = nn.BatchNorm2d(planes)
-            self.conv_11 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_11 = nn.BatchNorm2d(planes)
-            self.conv_12 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_12 = nn.BatchNorm2d(planes)
-            self.conv_13 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_13 = nn.BatchNorm2d(planes)
-            self.conv_14 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_14 = nn.BatchNorm2d(planes)
-            self.conv_15 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_15 = nn.BatchNorm2d(planes)
-        if (self.num_of_slice > 16):
-            self.conv_16 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_16 = nn.BatchNorm2d(planes)
-            self.conv_17 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_17 = nn.BatchNorm2d(planes)
-            self.conv_18 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_18 = nn.BatchNorm2d(planes)
-            self.conv_19 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_19 = nn.BatchNorm2d(planes)
-            self.conv_20 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_20 = nn.BatchNorm2d(planes)
-            self.conv_21 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_21 = nn.BatchNorm2d(planes)
-            self.conv_22 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_22 = nn.BatchNorm2d(planes)
-            self.conv_23 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_23 = nn.BatchNorm2d(planes)
-            self.conv_24 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_24 = nn.BatchNorm2d(planes)
-            self.conv_25 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_25 = nn.BatchNorm2d(planes)
-            self.conv_26 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_26 = nn.BatchNorm2d(planes)
-            self.conv_27 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_27 = nn.BatchNorm2d(planes)
-            self.conv_28 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_28 = nn.BatchNorm2d(planes)
-            self.conv_29 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_29 = nn.BatchNorm2d(planes)
-            self.conv_30 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_30 = nn.BatchNorm2d(planes)
-            self.conv_31 = nn.Conv2d(self.ch_group, planes, kernel_size=kernel_size, stride=stride, padding=padding,
-                                    bias=bias)
-            self.bn_31 = nn.BatchNorm2d(planes)
-
-    def forward(self, x):
-        _x = []
-        _start = 0
-        for i in range(0, self.num_of_slice, 1):
-            _x.append(torch.narrow(x, 1, _start, self.ch_group))
-            _start += self.ch_group
-        if(self.num_of_slice == 2): # 16
-            _out_0 = self.conv_0(_x[0])
-            _out_0 = self.bn_0(_out_0)
-            _out_1 = self.conv_1(_x[1])
-            _out_1 = self.bn_1(_out_1)
-            out = _out_0+_out_1
-        elif(self.num_of_slice == 4): # 32
-            _out_0 = self.conv_0(_x[0])
-            _out_0 = self.bn_0(_out_0)
-            _out_1 = self.conv_1(_x[1])
-            _out_1 = self.bn_1(_out_1)
-            _out_2 = self.conv_2(_x[2])
-            _out_2 = self.bn_2(_out_2)
-            _out_3 = self.conv_3(_x[3])
-            _out_3 = self.bn_3(_out_3)
-            out = _out_0+_out_1+_out_2+_out_3
-        elif(self.num_of_slice == 8): # 64
-            _out_0 = self.conv_0(_x[0])
-            _out_0 = self.bn_0(_out_0)
-            _out_1 = self.conv_1(_x[1])
-            _out_1 = self.bn_1(_out_1)
-            _out_2 = self.conv_2(_x[2])
-            _out_2 = self.bn_2(_out_2)
-            _out_3 = self.conv_3(_x[3])
-            _out_3 = self.bn_3(_out_3)
-            _out_4 = self.conv_4(_x[4])
-            _out_4 = self.bn_4(_out_4)
-            _out_5 = self.conv_5(_x[5])
-            _out_5 = self.bn_5(_out_5)
-            _out_6 = self.conv_6(_x[6])
-            _out_6 = self.bn_6(_out_6)
-            _out_7 = self.conv_7(_x[7])
-            _out_7 = self.bn_7(_out_7)
-            out = _out_0+_out_1+_out_2+_out_3+_out_4+_out_5+_out_6+_out_7
-        elif (self.num_of_slice == 16):  # 128
-            _out_0 = self.conv_0(_x[0])
-            _out_0 = self.bn_0(_out_0)
-            _out_1 = self.conv_1(_x[1])
-            _out_1 = self.bn_1(_out_1)
-            _out_2 = self.conv_2(_x[2])
-            _out_2 = self.bn_2(_out_2)
-            _out_3 = self.conv_3(_x[3])
-            _out_3 = self.bn_3(_out_3)
-            _out_4 = self.conv_4(_x[4])
-            _out_4 = self.bn_4(_out_4)
-            _out_5 = self.conv_5(_x[5])
-            _out_5 = self.bn_5(_out_5)
-            _out_6 = self.conv_6(_x[6])
-            _out_6 = self.bn_6(_out_6)
-            _out_7 = self.conv_7(_x[7])
-            _out_7 = self.bn_7(_out_7)
-            _out_8 = self.conv_8(_x[8])
-            _out_8 = self.bn_8(_out_8)
-            _out_9 = self.conv_9(_x[9])
-            _out_9 = self.bn_9(_out_9)
-            _out_10 = self.conv_10(_x[10])
-            _out_10 = self.bn_10(_out_10)
-            _out_11 = self.conv_11(_x[11])
-            _out_11 = self.bn_11(_out_11)
-            _out_12 = self.conv_12(_x[12])
-            _out_12 = self.bn_12(_out_12)
-            _out_13 = self.conv_13(_x[13])
-            _out_13 = self.bn_13(_out_13)
-            _out_14 = self.conv_14(_x[14])
-            _out_14 = self.bn_14(_out_14)
-            _out_15 = self.conv_15(_x[15])
-            _out_15 = self.bn_15(_out_15)
-            out = _out_0 + _out_1 + _out_2 + _out_3 + _out_4 + _out_5 + _out_6 + _out_7 \
-                  + _out_8 + _out_9 + _out_10 + _out_11 + _out_12 + _out_13 + _out_14 + _out_15
-        elif (self.num_of_slice == 32):  # 256
-            _out_0 = self.conv_0(_x[0])
-            _out_0 = self.bn_0(_out_0)
-            _out_1 = self.conv_1(_x[1])
-            _out_1 = self.bn_1(_out_1)
-            _out_2 = self.conv_2(_x[2])
-            _out_2 = self.bn_2(_out_2)
-            _out_3 = self.conv_3(_x[3])
-            _out_3 = self.bn_3(_out_3)
-            _out_4 = self.conv_4(_x[4])
-            _out_4 = self.bn_4(_out_4)
-            _out_5 = self.conv_5(_x[5])
-            _out_5 = self.bn_5(_out_5)
-            _out_6 = self.conv_6(_x[6])
-            _out_6 = self.bn_6(_out_6)
-            _out_7 = self.conv_7(_x[7])
-            _out_7 = self.bn_7(_out_7)
-            _out_8 = self.conv_8(_x[8])
-            _out_8 = self.bn_8(_out_8)
-            _out_9 = self.conv_9(_x[9])
-            _out_9 = self.bn_9(_out_9)
-            _out_10 = self.conv_10(_x[10])
-            _out_10 = self.bn_10(_out_10)
-            _out_11 = self.conv_11(_x[11])
-            _out_11 = self.bn_11(_out_11)
-            _out_12 = self.conv_12(_x[12])
-            _out_12 = self.bn_12(_out_12)
-            _out_13 = self.conv_13(_x[13])
-            _out_13 = self.bn_13(_out_13)
-            _out_14 = self.conv_14(_x[14])
-            _out_14 = self.bn_14(_out_14)
-            _out_15 = self.conv_15(_x[15])
-            _out_15 = self.bn_15(_out_15)
-            _out_16 = self.conv_16(_x[16])
-            _out_16 = self.bn_16(_out_16)
-            _out_17 = self.conv_17(_x[17])
-            _out_17 = self.bn_17(_out_17)
-            _out_18 = self.conv_18(_x[18])
-            _out_18 = self.bn_18(_out_18)
-            _out_19 = self.conv_19(_x[19])
-            _out_19 = self.bn_19(_out_19)
-            _out_20 = self.conv_20(_x[20])
-            _out_20 = self.bn_20(_out_20)
-            _out_21 = self.conv_21(_x[21])
-            _out_21 = self.bn_21(_out_21)
-            _out_22 = self.conv_22(_x[22])
-            _out_22 = self.bn_22(_out_22)
-            _out_23 = self.conv_23(_x[23])
-            _out_23 = self.bn_23(_out_23)
-            _out_24 = self.conv_24(_x[24])
-            _out_24 = self.bn_24(_out_24)
-            _out_25 = self.conv_25(_x[25])
-            _out_25 = self.bn_25(_out_25)
-            _out_26 = self.conv_26(_x[26])
-            _out_26 = self.bn_26(_out_26)
-            _out_27 = self.conv_27(_x[27])
-            _out_27 = self.bn_27(_out_27)
-            _out_28 = self.conv_28(_x[28])
-            _out_28 = self.bn_28(_out_28)
-            _out_29 = self.conv_29(_x[29])
-            _out_29 = self.bn_29(_out_29)
-            _out_30 = self.conv_30(_x[30])
-            _out_30 = self.bn_30(_out_30)
-            _out_31 = self.conv_31(_x[31])
-            _out_31 = self.bn_31(_out_31)
-            out = _out_0 + _out_1 + _out_2 + _out_3 + _out_4 + _out_5 + _out_6 + _out_7 \
-                  + _out_8 + _out_9 + _out_10 + _out_11 + _out_12 + _out_13 + _out_14 + _out_15 \
-                  + _out_16 + _out_17 + _out_18 + _out_19 + _out_20 + _out_21 + _out_22 + _out_23 \
-                  + _out_24 + _out_25 + _out_26 + _out_27 + _out_28 + _out_29 + _out_30 + _out_31
-        else:
-            print('Warning: num_of_slice is {0}, should not use SlicingBlock'.format(self.num_of_slice))
         return out
 
 class SlicingBlockFused(nn.Module):
@@ -436,21 +315,95 @@ class SlicingBlockFused(nn.Module):
     def forward(self, x):
         _x = []
         _start = 0
-        for i in range(0, self.num_of_slice, 1):
-            _x.append(torch.narrow(x, 1, _start, self.ch_group))
-            _start += self.ch_group
+        if(type(x) is tuple):
+            for i in range(0, self.num_of_slice, 1):
+                _x.append(torch.narrow(x[0], 1, _start, self.ch_group))
+                _start += self.ch_group
+            layerPrefix = x[1]
+            dump_act = x[2]
+        else:
+            for i in range(0, self.num_of_slice, 1):
+                _x.append(torch.narrow(x, 1, _start, self.ch_group))
+                _start += self.ch_group
+            layerPrefix = None
+            dump_act = None
+
         if(self.num_of_slice == 2): # 16
             out = self.conv_0(_x[0])+self.conv_1(_x[1])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.weight', tensor=self.conv_0.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.bias', tensor=self.conv_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.weight', tensor=self.conv_1.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.bias', tensor=self.conv_1.bias)
         elif(self.num_of_slice == 4): # 32
             out = self.conv_0(_x[0])+self.conv_1(_x[1])+self.conv_2(_x[2])+self.conv_3(_x[3])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.weight', tensor=self.conv_0.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.bias', tensor=self.conv_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.weight', tensor=self.conv_1.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.bias', tensor=self.conv_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.weight', tensor=self.conv_2.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.bias', tensor=self.conv_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.weight', tensor=self.conv_3.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.bias', tensor=self.conv_3.bias)
         elif(self.num_of_slice == 8): # 64
             out = self.conv_0(_x[0])+self.conv_1(_x[1])+self.conv_2(_x[2])+self.conv_3(_x[3])\
                  +self.conv_4(_x[4])+self.conv_5(_x[5])+self.conv_6(_x[6])+self.conv_7(_x[7])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.weight', tensor=self.conv_0.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.bias', tensor=self.conv_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.weight', tensor=self.conv_1.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.bias', tensor=self.conv_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.weight', tensor=self.conv_2.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.bias', tensor=self.conv_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.weight', tensor=self.conv_3.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.bias', tensor=self.conv_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.weight', tensor=self.conv_4.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.bias', tensor=self.conv_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.weight', tensor=self.conv_5.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.bias', tensor=self.conv_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.weight', tensor=self.conv_6.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.bias', tensor=self.conv_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.weight', tensor=self.conv_7.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.bias', tensor=self.conv_7.bias)
         elif (self.num_of_slice == 16):  # 128
             out = self.conv_0(_x[0]) + self.conv_1(_x[1]) + self.conv_2(_x[2]) + self.conv_3(_x[3]) \
                   + self.conv_4(_x[4]) + self.conv_5(_x[5]) + self.conv_6(_x[6]) + self.conv_7(_x[7]) \
                   + self.conv_8(_x[8]) + self.conv_9(_x[9]) + self.conv_10(_x[10]) + self.conv_11(_x[11]) \
                   + self.conv_12(_x[12]) + self.conv_13(_x[13]) + self.conv_14(_x[14]) + self.conv_15(_x[15])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.weight', tensor=self.conv_0.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.bias', tensor=self.conv_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.weight', tensor=self.conv_1.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.bias', tensor=self.conv_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.weight', tensor=self.conv_2.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.bias', tensor=self.conv_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.weight', tensor=self.conv_3.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.bias', tensor=self.conv_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.weight', tensor=self.conv_4.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.bias', tensor=self.conv_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.weight', tensor=self.conv_5.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.bias', tensor=self.conv_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.weight', tensor=self.conv_6.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.bias', tensor=self.conv_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.weight', tensor=self.conv_7.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.bias', tensor=self.conv_7.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_8.weight', tensor=self.conv_8.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_8.bias', tensor=self.conv_8.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_9.weight', tensor=self.conv_9.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_9.bias', tensor=self.conv_9.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_10.weight', tensor=self.conv_10.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_10.bias', tensor=self.conv_10.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_11.weight', tensor=self.conv_11.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_11.bias', tensor=self.conv_11.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_12.weight', tensor=self.conv_12.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_12.bias', tensor=self.conv_12.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_13.weight', tensor=self.conv_13.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_13.bias', tensor=self.conv_13.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_14.weight', tensor=self.conv_14.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_14.bias', tensor=self.conv_14.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_15.weight', tensor=self.conv_15.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_15.bias', tensor=self.conv_15.bias)
         elif (self.num_of_slice == 32):  # 256
             out = self.conv_0(_x[0]) + self.conv_1(_x[1]) + self.conv_2(_x[2]) + self.conv_3(_x[3]) \
                   + self.conv_4(_x[4]) + self.conv_5(_x[5]) + self.conv_6(_x[6]) + self.conv_7(_x[7]) \
@@ -460,6 +413,71 @@ class SlicingBlockFused(nn.Module):
                   + self.conv_20(_x[20]) + self.conv_21(_x[21]) + self.conv_22(_x[22]) + self.conv_23(_x[23]) \
                   + self.conv_24(_x[24]) + self.conv_25(_x[25]) + self.conv_26(_x[26]) + self.conv_27(_x[27]) \
                   + self.conv_28(_x[28]) + self.conv_29(_x[29]) + self.conv_30(_x[30]) + self.conv_31(_x[31])
+            if (dump_act != None):
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.weight', tensor=self.conv_0.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_0.bias', tensor=self.conv_0.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.weight', tensor=self.conv_1.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_1.bias', tensor=self.conv_1.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.weight', tensor=self.conv_2.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_2.bias', tensor=self.conv_2.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.weight', tensor=self.conv_3.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_3.bias', tensor=self.conv_3.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.weight', tensor=self.conv_4.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_4.bias', tensor=self.conv_4.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.weight', tensor=self.conv_5.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_5.bias', tensor=self.conv_5.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.weight', tensor=self.conv_6.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_6.bias', tensor=self.conv_6.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.weight', tensor=self.conv_7.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_7.bias', tensor=self.conv_7.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_8.weight', tensor=self.conv_8.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_8.bias', tensor=self.conv_8.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_9.weight', tensor=self.conv_9.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_9.bias', tensor=self.conv_9.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_10.weight', tensor=self.conv_10.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_10.bias', tensor=self.conv_10.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_11.weight', tensor=self.conv_11.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_11.bias', tensor=self.conv_11.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_12.weight', tensor=self.conv_12.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_12.bias', tensor=self.conv_12.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_13.weight', tensor=self.conv_13.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_13.bias', tensor=self.conv_13.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_14.weight', tensor=self.conv_14.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_14.bias', tensor=self.conv_14.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_15.weight', tensor=self.conv_15.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_15.bias', tensor=self.conv_15.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_16.weight', tensor=self.conv_16.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_16.bias', tensor=self.conv_16.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_17.weight', tensor=self.conv_17.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_17.bias', tensor=self.conv_17.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_18.weight', tensor=self.conv_18.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_18.bias', tensor=self.conv_18.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_19.weight', tensor=self.conv_19.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_19.bias', tensor=self.conv_19.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_20.weight', tensor=self.conv_20.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_20.bias', tensor=self.conv_20.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_21.weight', tensor=self.conv_21.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_21.bias', tensor=self.conv_21.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_22.weight', tensor=self.conv_22.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_22.bias', tensor=self.conv_22.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_23.weight', tensor=self.conv_23.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_23.bias', tensor=self.conv_23.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_24.weight', tensor=self.conv_24.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_24.bias', tensor=self.conv_24.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_25.weight', tensor=self.conv_25.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_25.bias', tensor=self.conv_25.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_26.weight', tensor=self.conv_26.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_26.bias', tensor=self.conv_26.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_27.weight', tensor=self.conv_27.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_27.bias', tensor=self.conv_27.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_28.weight', tensor=self.conv_28.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_28.bias', tensor=self.conv_28.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_29.weight', tensor=self.conv_29.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_29.bias', tensor=self.conv_29.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_30.weight', tensor=self.conv_30.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_30.bias', tensor=self.conv_30.bias)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_31.weight', tensor=self.conv_31.weight)
+                dump_to_npy(name=str(dump_act) + '.' + str(layerPrefix) + '.conv_31.bias', tensor=self.conv_31.bias)
         else:
             print('Warning: num_of_slice is {0}, should not use SlicingBlock'.format(self.num_of_slice))
         return out

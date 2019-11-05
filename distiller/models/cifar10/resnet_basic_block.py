@@ -69,12 +69,13 @@ class BasicBlockFused(nn.Module):
     def __init__(self, block_gates, inplanes, planes, stride=1, downsample=None, ch_group=None):
         super(BasicBlockFused, self).__init__()
         self.block_gates = block_gates
-        if (ch_group == None):
+        self.ch_group = ch_group
+        if (self.ch_group == None):
             self.fused1 = conv3x3_bias(inplanes, planes, stride)
         else:
             self.fused1 = SlicingBlockFused(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=ch_group)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
-        if (ch_group == None):
+        if (self.ch_group == None):
             self.fused2 = conv3x3_bias(planes, planes)
         else:
             self.fused2 = SlicingBlockFused(planes, planes, stride=1, padding=1, bias=True, ch_group=ch_group)
@@ -97,28 +98,42 @@ class BasicBlockFused(nn.Module):
         if self.block_gates[0]:
             # if (dump_act != None):
             #     dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_input.activation', tensor=_input)
-            out = self.fused1(_input)
-            if (dump_act != None):
+
+            if (dump_act != None and self.ch_group == None):
+                out = self.fused1(_input)
                 dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1.activation', tensor=out)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.weight', tensor=self.fused1.weight)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.bias', tensor=self.fused1.bias)
+            elif(dump_act != None and self.ch_group != None):
+                out = self.fused1((_input, '.res'+str(layerId)+'_conv1', dump_act))
+            else:
+                out = self.fused1(_input)
+
             out = self.relu1(out)
             if (dump_act != None):
                 dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv1_relu.activation', tensor=out)
 
         if self.block_gates[1]:
-            out = self.fused2(out)
-            if (dump_act != None):
+            if (dump_act != None and self.ch_group == None):
+                out = self.fused2(out)
                 dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_conv2.activation', tensor=out)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.weight', tensor=self.fused2.weight)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.bias', tensor=self.fused2.bias)
+            elif (dump_act != None and self.ch_group != None):
+                out = self.fused2((out, '.res' + str(layerId) + '_conv2', dump_act))
+            else:
+                out = self.fused2(out)
 
         if self.downsample is not None:
-            residual = self.downsample(_input)
-            if (dump_act != None):
+            if (dump_act != None and self.ch_group == None):
+                residual = self.downsample(_input)
                 dump_to_npy(name=str(dump_act) + '.res'+str(layerId)+'_match.activation', tensor=residual)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.weight', tensor=self.downsample.weight)
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.bias', tensor=self.downsample.bias)
+            elif(dump_act != None and self.ch_group != None):
+                residual = self.downsample((_input, '.res'+str(layerId)+'_match', dump_act))
+            else:
+                residual = self.downsample(_input)
 
         out += residual
         if (dump_act != None):

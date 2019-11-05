@@ -2,7 +2,8 @@ import os
 import torch.nn as nn
 import numpy as np
 
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
+NUM_CLASSES = 10
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_200x')
 
 def dump_to_npy(name, tensor):
     fileName = os.path.join(fileDumpPath, name)
