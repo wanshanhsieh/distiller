@@ -53,7 +53,7 @@ def _round(x):
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    transforms.Resize(224), # 224 -> 220
+    transforms.Resize(200), # 224 -> 220
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
@@ -63,7 +63,7 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    transforms.Resize(224), # 224 -> 220
+    transforms.Resize(200), # 224 -> 220
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -164,13 +164,13 @@ def train(net, compression_scheduler, epochs, optimizer, criterion, args):
     msglogger.info("Spent {} min".format((end_t - start_t)/60))
 
 def dump_to_npy(name, tensor):
-    fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191031_resnet10_fp32_fused_220x220')
+    fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_200x', 'input')
     fileName = os.path.join(fileDumpPath, name)
     tensorToNumpy = tensor.detach().cpu().numpy()
     np.save(fileName, tensorToNumpy)
 
 def test(model, criterion):
-    dump_act = None
+    dump_act = 2
     correct = 0
     total = 0
     classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, 5))

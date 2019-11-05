@@ -145,7 +145,7 @@ def cifar10_get_datasets(data_dir):
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
-        transforms.Resize(224), # 224 -> 220
+        transforms.Resize(200), # 224 -> 200
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Lambda(_mul),
@@ -159,7 +159,7 @@ def cifar10_get_datasets(data_dir):
 
     test_transform = transforms.Compose([
         # transforms.Pad((96, 96, 96, 96), fill=0, padding_mode='constant'),
-        transforms.Resize(224), # 224 -> 220
+        transforms.Resize(200), # 224 -> 200
         transforms.ToTensor(),
         transforms.Lambda(_mul),
         transforms.Lambda(_round),

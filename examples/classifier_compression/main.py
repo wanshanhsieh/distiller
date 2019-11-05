@@ -51,9 +51,10 @@ def _round(x):
 
 # Data
 print('==> Preparing data..')
+inputSize = 220
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    transforms.Resize(224), # 224 -> 220
+    transforms.Resize(inputSize), # 224 -> 220 -> 200
     transforms.RandomHorizontalFlip(),
     transforms.RandomRotation(90),
     transforms.ToTensor(),
@@ -64,7 +65,7 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    transforms.Resize(224), # 224 -> 220
+    transforms.Resize(inputSize), # 224 -> 220 -> 200
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -131,8 +132,8 @@ if device == 'cuda':
 # sys.exit()
 
 criterion = nn.CrossEntropyLoss()
-# optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-optimizer = optim.Adam(net.parameters(), lr=0.00009, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+# optimizer = optim.SGD(net.parameters(), lr=0.00001, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-4, amsgrad=False)
 accRecord = []
 
 def dump_NCHW(file, input):
@@ -197,16 +198,17 @@ def test(epoch, dump_act=None):
     acc = 100.*correct/total
     accRecord[epoch] = acc
     if not args.test or (args.test and fusion):
-        print('Saving to '+str(args.output_file_name)+'.pth')
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        innerFolder = '20191103_resnet10_fp32_ch8_224x'
+        innerFolder = '20191104_resnet10_fp32_220x'
         if not os.path.isdir('checkpoint/'+str(innerFolder)):
             os.makedirs('checkpoint/'+str(innerFolder))
         if (acc > best_acc):
             best_acc = acc
-            torch.save(net.state_dict(), './checkpoint/' + str(innerFolder)+'/'+str(args.output_file_name)+'_best.pth')
-        torch.save(net.state_dict(), './checkpoint/'+str(innerFolder)+'/'+str(args.output_file_name)+'.pth')
+            outputName = str(args.output_file_name)+'_'+str(inputSize)+'x_'+'ch'+str(args.ch)+'_'+str(int(best_acc))+'.pth'
+            print('Saving to ' + str(outputName))
+            torch.save(net.state_dict(), './checkpoint/' + str(innerFolder)+'/'+outputName)
+        torch.save(net.state_dict(), './checkpoint/'+str(innerFolder)+'/'+str(args.output_file_name)+'_'+str(inputSize)+'x'+'.pth')
         # with open('./checkpoint/dump_train_input.txt', "w") as text_file0:
         #     dump_NCHW(text_file0, input_train)
         # text_file0.close()
