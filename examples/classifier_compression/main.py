@@ -51,12 +51,12 @@ def _round(x):
 
 # Data
 print('==> Preparing data..')
-inputSize = 220
+inputSize = 200
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.Resize(inputSize), # 224 -> 220 -> 200
     transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(90),
+    # transforms.RandomRotation(90),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -133,7 +133,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 # optimizer = optim.SGD(net.parameters(), lr=0.00001, momentum=0.9, weight_decay=5e-4)
-optimizer = optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=5e-4, amsgrad=False)
+optimizer = optim.Adam(net.parameters(), lr=0.002, betas=(0.8, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
 accRecord = []
 
 def dump_NCHW(file, input):
@@ -200,7 +200,7 @@ def test(epoch, dump_act=None):
     if not args.test or (args.test and fusion):
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        innerFolder = '20191104_resnet10_fp32_220x'
+        innerFolder = '20191107_resnet10_fp32_200x'
         if not os.path.isdir('checkpoint/'+str(innerFolder)):
             os.makedirs('checkpoint/'+str(innerFolder))
         if (acc > best_acc):

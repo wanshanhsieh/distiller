@@ -53,7 +53,7 @@ def _round(x):
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
-    transforms.Resize(200), # 224 -> 220
+    transforms.Resize(200), # 224 -> 220 -> 200
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Lambda(_mul),
@@ -63,7 +63,7 @@ transform_train = transforms.Compose([
 
 transform_test = transforms.Compose([
     transforms.RandomCrop(32, padding=0),
-    transforms.Resize(200), # 224 -> 220
+    transforms.Resize(200), # 224 -> 220 -> 200
     transforms.ToTensor(),
     transforms.Lambda(_mul),
     transforms.Lambda(_round),
@@ -82,7 +82,7 @@ worker_init_fn = __deterministic_worker_init_fn
 
 testset = torchvision.datasets.CIFAR10(root='../datasets/cifar10_resize_226x226', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, \
-                                         batch_size=100, \
+                                         batch_size=1, \
                                          shuffle=False, \
                                          num_workers=1, \
                                          worker_init_fn=worker_init_fn)
