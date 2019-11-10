@@ -139,11 +139,11 @@ class ResNetCifarReshape(nn.Module):
         x = self.poolPadding(x)
         # print('---------------------------------')
         # print('avgpool input after padding {0}'.format(x.size()))
-        x = self.avgpool(x)
+        x = self.maxpool(x)
         # print('avgpool output 1 {0}'.format(x.size()))
-        x = self.avgpool(x)
+        x = self.maxpool(x)
         # print('avgpool output 2 {0}'.format(x.size()))
-        x = self.avgpool(x)
+        x = self.maxpool(x)
         # print('avgpool output 3 {0}'.format(x.size()))
 
         x = x.view(-1, x.size(1))
@@ -286,7 +286,7 @@ class ResNetCifarReshapeFused(nn.Module):
         # print('maxpool input {0}'.format(x.size()))
         x = self.maxpool(x)
         if (dump_act != None):
-            dump_to_npy(name=str(dump_act) + '.maxpooling.activation', tensor=x)
+            dump_to_npy(name=str(dump_act) + '.pool-max1.activation', tensor=x)
         x = self.dropout(x)
         # print('maxpool output {0}'.format(x.size()))
 
@@ -307,9 +307,15 @@ class ResNetCifarReshapeFused(nn.Module):
 
         x = self.poolPadding(x)
         # print('avgpool input {0}'.format(x.size()))
-        x = self.avgpool(x)
-        x = self.avgpool(x)
-        x = self.avgpool(x)
+        x = self.maxpool(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.pool-max2.activation', tensor=x)
+        x = self.maxpool(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.pool-max3.activation', tensor=x)
+        x = self.maxpool(x)
+        if (dump_act != None):
+            dump_to_npy(name=str(dump_act) + '.pool-max4.activation', tensor=x)
         # print('avgpool output {0}'.format(x.size()))
 
         x = x.view(-1, x.size(1))
