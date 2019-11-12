@@ -181,13 +181,13 @@ class ResNetCifarReshapeFused(nn.Module):
         if (self.ch_group == None):
             self.fused2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused2 = SlicingBlockFused(16, 16, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused2 = SlicingBlockFused(16, 16, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=True)
 
         if (self.ch_group == None):
             self.fused3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1, bias=True)
         else:
-            self.fused3 = SlicingBlockFused(16, 32, kernel_size=3, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused3 = SlicingBlockFused(16, 32, kernel_size=3, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.relu3 = nn.ReLU(inplace=True)
 
         self.poolPadding = nn.ZeroPad2d((0, 1, 0, 1))  # left, right, top, bottom
@@ -212,10 +212,12 @@ class ResNetCifarReshapeFused(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
-                m.bias.data.zero_()
+                if (m.bias is not None):
+                    m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
-                m.bias.data.zero_()
+                if(m.bias is not None):
+                    m.bias.data.zero_()
 
     def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
         downsample = None
@@ -226,7 +228,7 @@ class ResNetCifarReshapeFused(nn.Module):
                                        kernel_size=1, stride=stride, bias=True)
             else:
                 downsample = SlicingBlockFused(self.inplanes, planes * block.expansion, \
-                                          kernel_size=1, stride=stride, padding=0, bias=True, ch_group=ch_group)
+                                          kernel_size=1, stride=stride, padding=0, bias=False, ch_group=ch_group)
         layers = []
         layers.append(block(layer_gates[0], self.inplanes, planes, \
                             stride=stride, downsample=downsample, ch_group=ch_group))
@@ -260,6 +262,7 @@ class ResNetCifarReshapeFused(nn.Module):
             dump_to_npy(name=str(dump_act) + '.conv2.bias', tensor=self.fused2.bias)
         elif(dump_act != None and self.ch_group != None):
             x = self.fused2((x, 'conv2', dump_act))
+            dump_to_npy(name=str(dump_act) + '.conv2.activation', tensor=x)
         else:
             x = self.fused2(x)
 
@@ -275,6 +278,7 @@ class ResNetCifarReshapeFused(nn.Module):
             dump_to_npy(name=str(dump_act) + '.conv3.bias', tensor=self.fused3.bias)
         elif (dump_act != None and self.ch_group != None):
             x = self.fused3((x, 'conv3', dump_act))
+            dump_to_npy(name=str(dump_act) + '.conv3.activation', tensor=x)
         else:
             x = self.fused3(x)
 
@@ -327,6 +331,7 @@ class ResNetCifarReshapeFused(nn.Module):
             dump_to_npy(name=str(dump_act) + '.fc.bias', tensor=self.fc.bias)
         elif (dump_act != None and self.ch_group != None):
             x = self.fc((x, 'fc', dump_act))
+            dump_to_npy(name=str(dump_act) + '.fc.activation', tensor=x)
         else:
             x = self.fc(x)
         # print('fc output {0}'.format(x.size()))

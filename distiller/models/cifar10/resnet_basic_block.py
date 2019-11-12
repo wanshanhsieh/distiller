@@ -73,12 +73,12 @@ class BasicBlockFused(nn.Module):
         if (self.ch_group == None):
             self.fused1 = conv3x3_bias(inplanes, planes, stride)
         else:
-            self.fused1 = SlicingBlockFused(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=True, ch_group=ch_group)
+            self.fused1 = SlicingBlockFused(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False, ch_group=ch_group)
         self.relu1 = nn.ReLU(inplace=False)  # To enable layer removal inplace must be False
         if (self.ch_group == None):
             self.fused2 = conv3x3_bias(planes, planes)
         else:
-            self.fused2 = SlicingBlockFused(planes, planes, stride=1, padding=1, bias=True, ch_group=ch_group)
+            self.fused2 = SlicingBlockFused(planes, planes, stride=1, padding=1, bias=False, ch_group=ch_group)
         self.relu2 = nn.ReLU(inplace=False)
         self.downsample = downsample
         self.stride = stride
@@ -106,6 +106,7 @@ class BasicBlockFused(nn.Module):
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.bias', tensor=self.fused1.bias)
             elif(dump_act != None and self.ch_group != None):
                 out = self.fused1((_input, 'res'+str(layerId)+'_conv1', dump_act))
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv1.activation', tensor=out)
             else:
                 out = self.fused1(_input)
 
@@ -121,6 +122,7 @@ class BasicBlockFused(nn.Module):
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.bias', tensor=self.fused2.bias)
             elif (dump_act != None and self.ch_group != None):
                 out = self.fused2((out, 'res' + str(layerId) + '_conv2', dump_act))
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_conv2.activation', tensor=out)
             else:
                 out = self.fused2(out)
 
@@ -132,6 +134,7 @@ class BasicBlockFused(nn.Module):
                 dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.bias', tensor=self.downsample.bias)
             elif(dump_act != None and self.ch_group != None):
                 residual = self.downsample((_input, 'res'+str(layerId)+'_match', dump_act))
+                dump_to_npy(name=str(dump_act) + '.res' + str(layerId) + '_match.activation', tensor=residual)
             else:
                 residual = self.downsample(_input)
 
