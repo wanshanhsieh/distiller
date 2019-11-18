@@ -1357,6 +1357,8 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
         self.decay = ema_decay
         self.per_channel_wts = per_channel_wts
 
+        self.file = os.path.join('checkpoint', '20191107_resnet10_fp32_ch8_200x', 'scale_dump.txt')
+
         def linear_quantize_param(param_fp, param_meta):
             m = param_meta.module
             # We don't quantize the learned weights of embedding layers per-channel, because they're used
@@ -1369,6 +1371,9 @@ class QuantAwareTrainRangeLinearQuantizer(Quantizer):
             setattr(m, param_meta.q_attr_name + '_scale', scale)
             setattr(m, param_meta.q_attr_name + '_zero_point', zero_point)
             out = LinearQuantizeSTE.apply(param_fp, scale, zero_point, True, False)
+            # with open(self.file, "a") as text_file:
+            #     text_file.writelines(param_meta.q_attr_name + '_scale ' + str(scale) + '\n')
+            # text_file.close()
             return out
 
         def activation_replace_fn(module, name, qbits_map):
