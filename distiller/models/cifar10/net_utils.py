@@ -3,10 +3,14 @@ import torch.nn as nn
 import numpy as np
 
 NUM_CLASSES = 10
-fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_200x')
+fileDumpPath = os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', \
+                            '20191107_resnet10_fp32_ch8_200x', '20191113_pytorch_resnet10_ch8_200x_onebias_dummyrelu_batch1_num1')
 
 def dump_to_npy(name, tensor):
-    fileName = os.path.join(fileDumpPath, name)
+    if('activation' in name):
+        fileName = os.path.join(fileDumpPath, 'activation', name)
+    else:
+        fileName = os.path.join(fileDumpPath, 'weight_bias', name)
     tensorToNumpy = tensor.detach().cpu().numpy()
     np.save(fileName, tensorToNumpy)
 
