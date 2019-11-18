@@ -206,6 +206,7 @@ class ResNetCifarReshapeFused(nn.Module):
         else:
             self.fc = SlicingLinearBlock(256 * block.expansion, num_classes)
             # self.fc1024 = SlicingLinearBlock(4 * 256 * block.expansion, num_classes)
+
         self.dropout = nn.Dropout()
 
         for m in self.modules():
@@ -218,6 +219,16 @@ class ResNetCifarReshapeFused(nn.Module):
                 m.weight.data.fill_(1)
                 if(m.bias is not None):
                     m.bias.data.zero_()
+
+        # self.fc_dummy = nn.Linear(num_classes, num_classes)
+        # self.fc_dummy.weight.data.fill_(0)
+        # for i in range(num_classes):
+        #     self.fc_dummy.weight.data[i][i] = 1
+        # if (self.fc_dummy.bias is not None):
+        #     self.fc_dummy.bias.data.zero_()
+        # self.fc_dummy.requires_grad = False
+
+        self.relu_dummy = nn.ReLU(inplace=True)
 
     def _make_layer(self, layer_gates, block, planes, blocks, stride=1, ch_group=None):
         downsample = None
@@ -335,5 +346,6 @@ class ResNetCifarReshapeFused(nn.Module):
         else:
             x = self.fc(x)
         # print('fc output {0}'.format(x.size()))
+        x = self.relu_dummy(x)
 
         return x

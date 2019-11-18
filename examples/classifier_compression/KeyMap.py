@@ -218,4 +218,5 @@ key_ch8_map = {'inputs_quant': 'input',
                'fc.fc_29': 'fc.fc_29',
                'fc.fc_30': 'fc.fc_30',
                'fc.fc_31': 'fc.fc_31',
+               'relu_dummy.fake_q': 'fc',
                }
