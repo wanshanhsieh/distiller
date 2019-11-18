@@ -51,10 +51,12 @@ from net_utils import NUM_CLASSES as NUM_CLASSES
 __all__ = ['resnet10_cifar', 'resnet20_cifar', 'resnet32_cifar', 'resnet44_cifar', 'resnet56_cifar']
 
 model_saved = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191103_resnet10_fp32_200x', 'checkpoint_fuse_retrain_6_best.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', \
+                                   '20191107_resnet10_fp32_200x', 'ckpt_fuse_200x_89.pth'),
 }
 model_pretrained = {
-    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', '20191104_resnet10_fp32_220x', 'checkpoint_retrain_2_220x.pth'),
+    'resnet10_cifar': os.path.join('D:', os.sep, 'playground', 'MyDistiller', 'examples', 'classifier_compression', 'checkpoint', \
+                                   '20191107_resnet10_fp32_ch8_200x', 'ckpt_one_bias_dummy_relu_200x_ch8_quant_acc88.pth'),
 }
 
 printLayerInfo = False
